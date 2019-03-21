@@ -1,6 +1,7 @@
 import numpy as np
 from events import Event
 from modules import Packet
+import gsim_utils as gu
 
 
 class Source:
@@ -8,7 +9,7 @@ class Source:
     A source generates Packets
     """
 
-    def __init__(self, rate, outputs, distribution='Poisson', attack_prob=0, sim=None):
+    def __init__(self, rate, outputs, distribution='Poisson', attack_prob=0, sim=None, model=None):
         """
         Constructor
 
@@ -20,8 +21,12 @@ class Source:
         self.rate = rate
         self.outputs = outputs
         self.distribution = distribution
-        self.sim = sim
         self.attack_prob = attack_prob
+        self.sim = sim
+        self.model = model
+
+    def register_with_model(self, model):
+        self.model = model
 
     def generate_packet(self):
         """
@@ -30,46 +35,43 @@ class Source:
         """
 
         # Timestamp of next packet generation
-        if self.distribution == 'Poisson':
-            timestamp = self.sim.get_time() + np.random.poisson(self.rate, 1)
+        timestamp = self.sim.get_time() + np.random.poisson(self.rate, 1)[0]
 
         # Don't generate a packet if simulation duration reached
         if timestamp > self.sim.get_duration():
             return
 
         # Choose a destination module for the packet
-        output_modules = [o['module'] for o in self.outputs]
-        output_probs = [o['prob'] for o in self.outputs]
-        print('output_modules', output_modules)
-        index = np.random.choice(len(output_modules), output_probs)
-        dest_module = output_modules[index]
+        destination = gu.choose_output(self.outputs)
 
         # Create packet
         packet = Packet(
             size=None,
             malicious=np.random.choice([True, False], 1, p=[self.attack_prob, 1-self.attack_prob]),
             active=True,
-            module_id=id(dest_module),
+            module_id=id(self),
             generation_time=timestamp
         )
 
         # packet generation event
-        event = Event(
+        event1 = Event(
             timestamp=timestamp,
             etype='PACKET_GENERATION',
             module_id=id(self),
             packet_id=id(packet)
         )
+        self.sim.add_event(event1)
 
         # packet arrival event (at the module connected as output to the source)
-        event = Event(
+        event2 = Event(
             timestamp=timestamp,
-            etype='PACKET_ARRIVAL',
-            module_id=id(dest_module),
+            etype='QUEUE_PACKET_ARRIVAL',
+            module_id=id(destination),
             packet_id=id(packet)
         )
 
         model = self.sim.get_model()
         model.add_packet(packet)
-        self.sim.add_event(event)
+
+        self.sim.add_event(event2)
 
