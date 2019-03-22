@@ -1,10 +1,17 @@
 from queue import PriorityQueue
-from threading import Thread
 import gsim_utils as gu
 from modules import Queue, Server
 from generators import Source
 from events import Event
 import numpy as np
+import logging
+import os
+
+
+if os.path.isfile('logs.log'):
+    os.unlink('logs.log')
+
+logging.basicConfig(filename='logs.log', level=logging.DEBUG)
 
 
 class Simulation:
@@ -16,17 +23,62 @@ class Simulation:
         self.time = 0
 
     def process_event(self, event):
-        if event.etype == 'SERVICE_COMPLETE':
-            # todo: get the server which completed service, forward packet to server's outputs, and get a new packet from queue (if existing)
-            module = self.model.get_module(event.get_module_id())
-            packet = self.model.get_packet(event.get_packet_id())
+        # Each event has a module and packet associated with it
 
-            print(type(module))
-            print(type(packet))
+        if event.etype == 'SERVICE_COMPLETE':
+            server_id = event.get_module_id()
+            packet_id = event.get_packet_id()
+            server = self.model.get_module(server_id)
+            packet = self.model.get_packet(packet_id)
+            logging.info("%d -- %s at node %s, packet id: %s" %
+                         (self.get_time(), event.etype, server.name, str(packet_id)[-3:]))
+            del event
+            server.busy = False
+
+            # Send to one of the module's outputs
+            destination = gu.choose_output(server.outputs)
+            if type(destination) == Server and not destination.busy:
+                # move packet to server
+                event = Event(
+                    timestamp=self.get_time(),
+                    etype='SERVER_PACKET_ARRIVAL',
+                    module_id=id(destination),
+                    packet_id=packet_id
+                )
+                self.add_event(event)
+            elif type(destination) == Queue:
+                # Schedule a queue packet arrival event
+                event = Event(
+                    timestamp=self.get_time(),
+                    etype='QUEUE_PACKET_ARRIVAL',
+                    module_id=id(destination),
+                    packet_id=id(packet)
+                )
+                self.add_event(event)
+
+            # Get a new packet from inputs
+            # todo: Implement multiple inputs to a server
+            input_module = server.inputs[0]['module']
+
+            logging.debug("Server %s asks input %s (len: %d) for more packets" %
+                          (server.name, input_module.name, len(input_module)))
+            if type(input_module) == Queue and len(input_module) > 0:
+                new_packet = input_module.pop()
+                event = Event(
+                    timestamp=self.get_time(),
+                    etype='SERVER_PACKET_ARRIVAL',
+                    module_id=server_id,
+                    packet_id=id(new_packet)
+                )
+                self.add_event(event)
+
         elif event.etype == 'PACKET_GENERATION':
             # generate a new packet
-            source_id = event.module_id
+            source_id = event.get_module_id()
+            packet_id = event.get_packet_id()
             source = self.model.get_module(source_id)
+            logging.info("%d -- %s at node %s, packet id: %s" %
+                         (self.get_time(), event.etype, source.name, str(packet_id)[-3:]))
             source.generate_packet()
             del event
 
@@ -38,11 +90,17 @@ class Simulation:
             packet = self.model.get_packet(packet_id)
             packet.module_id = queue_id
             queue.appendleft(packet)
+            logging.info("%d -- %s at node %s (qlen: %d), packet id: %s" %
+                         (self.get_time(), event.etype, queue.name, len(queue), str(packet_id)[-3:]))
+            del event
 
             # if packet is first in the queue, inform the output module of this
-            print('len(queue)', len(queue))
             if len(queue) == 1:
                 destination = gu.choose_output(queue.outputs)
+                if destination is None:
+                    # Current module has no outputs
+                    return
+
                 if type(destination) == Server and not destination.busy:
                     # move packet to server
                     event = Event(
@@ -52,19 +110,43 @@ class Simulation:
                         packet_id=packet_id
                     )
                     self.add_event(event)
+                    queue.pop()
+                elif type(destination) == Queue:
+                    # Schedule a queue packet arrival event
+                    event = Event(
+                        timestamp=self.get_time(),
+                        etype='QUEUE_PACKET_ARRIVAL',
+                        module_id=id(destination),
+                        packet_id=id(packet)
+                    )
+                    self.add_event(event)
+                    queue.pop()
 
         elif event.etype == 'SERVER_PACKET_ARRIVAL':
             server_id = event.get_module_id()
             packet_id = event.get_packet_id()
             server = self.model.get_module(server_id)
             packet = self.model.get_packet(packet_id)
+            packet.module_id = server_id
 
             if not server.busy:
                 server.busy = True
 
-            # start service
-            # todo: get exponentially distributed interval with mean server.rate ** (-1) and schedule an event
+            # Schedule service end time
+            service_duration = np.random.exponential(1 / server.service_rate)
 
+            logging.info("%d -- %s at node %s, packet id: %s, service duration: %d" %
+                         (self.get_time(), event.etype, server.name, str(packet_id)[-3:], service_duration))
+            del event
+
+            timestamp = service_duration + self.get_time()
+            event = Event(
+                timestamp=timestamp,
+                etype='SERVICE_COMPLETE',
+                module_id=server_id,
+                packet_id=packet_id
+            )
+            self.add_event(event)
 
     def add_model(self, model):
         self.model = model
@@ -82,18 +164,23 @@ class Simulation:
         return self.duration
 
     def run(self):
-        # start data generators
+
+        # Start data generators
         model = self.model
         for _, source in model.sources.items():
-            # thread = Thread(target=source.generate_packet)
-            # thread.start()
             source.generate_packet()
 
         while self.pq.qsize() > 0:
+
+            # Get next event from queue
             event = self.pq.get()
             self.time = event.get_timestamp()
-            print("time: %s -- event type: %s at node: %s" %
-                  (self.get_time(), event.etype, self.model.get_module(event.module_id)))
+
+            # Check if simulation end reached
+            if self.time > self.duration:
+                break
+
+            # Process event
             self.process_event(event)
 
 
@@ -110,12 +197,8 @@ class Model:
         module.register_with_model(self)
         self.modules[id(module)] = module
 
-        print('here', type(module))
         if type(module) == Source:
-            print('yahoo')
             self.sources[id(module)] = module
-        else:
-            print('non yahoo')
 
     def get_module(self, module_id):
         return self.modules[module_id]
@@ -129,17 +212,16 @@ class Model:
 
 if __name__ == '__main__':
 
-
-    sim = Simulation(duration=20)
+    sim = Simulation(duration=50)
     m = Model(name='model1')
 
     # Declare model's components
     q1 = Queue(name='q1')
-    s1 = Server(name='s1')
+    s1 = Server(name='s1', service_rate=0.2)
     q2 = Queue(name='destination')
 
-    # Add component's details
-    gen = Source(rate=5, outputs=[{'module': q1, 'prob': 1}], sim=sim)
+    # Add component's inputs and outputs
+    gen = Source(rate=5, outputs=[{'module': q1, 'prob': 1}], sim=sim, name='gen')
     q1.outputs = [{'module': s1, 'prob': 1}]
     s1.inputs = [{'module': q1, 'prob': 1}]
     s1.outputs = [{'module': q2, 'prob': 1}]

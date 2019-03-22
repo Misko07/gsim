@@ -9,7 +9,7 @@ class Source:
     A source generates Packets
     """
 
-    def __init__(self, rate, outputs, distribution='Poisson', attack_prob=0, sim=None, model=None):
+    def __init__(self, rate, outputs, distribution='Poisson', attack_prob=0, sim=None, model=None, name=None):
         """
         Constructor
 
@@ -24,6 +24,7 @@ class Source:
         self.attack_prob = attack_prob
         self.sim = sim
         self.model = model
+        self.name = name
 
     def register_with_model(self, model):
         self.model = model
@@ -36,10 +37,6 @@ class Source:
 
         # Timestamp of next packet generation
         timestamp = self.sim.get_time() + np.random.poisson(self.rate, 1)[0]
-
-        # Don't generate a packet if simulation duration reached
-        if timestamp > self.sim.get_duration():
-            return
 
         # Choose a destination module for the packet
         destination = gu.choose_output(self.outputs)
@@ -60,7 +57,6 @@ class Source:
             module_id=id(self),
             packet_id=id(packet)
         )
-        self.sim.add_event(event1)
 
         # packet arrival event (at the module connected as output to the source)
         event2 = Event(
@@ -74,4 +70,5 @@ class Source:
         model.add_packet(packet)
 
         self.sim.add_event(event2)
+        self.sim.add_event(event1)
 
