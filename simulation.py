@@ -3,15 +3,17 @@ import gsim_utils as gu
 from modules import Queue, Server
 from generators import Source
 from events import Event
+import logging.config
 import numpy as np
 import logging
 import os
 
 
-if os.path.isfile('logs.log'):
-    os.unlink('logs.log')
+# if os.path.isfile('logs.log'):
+#     os.unlink('logs.log')
 
-logging.basicConfig(filename='logs.log', level=logging.DEBUG)
+logging.config.fileConfig('logging.conf')
+logger = logging.getLogger('simulation')
 
 
 class Simulation:
@@ -22,6 +24,16 @@ class Simulation:
         self.pq = PriorityQueue()
         self.time = 0
 
+    def print_summary(self):
+        logger.info("*** Summary for model %s ***" % self.model.name)
+        logger.info("- " * 30)
+        for module in self.model.get_modules():
+            logger.info('Module: %s' % module.name)
+            logger.info('-' * 30)
+            if hasattr(module, 'results'):
+                module.results.print_summary()
+            logger.info("- " * 30)
+
     def process_event(self, event):
         # Each event has a module and packet associated with it
 
@@ -30,8 +42,8 @@ class Simulation:
             packet_id = event.get_packet_id()
             server = self.model.get_module(server_id)
             packet = self.model.get_packet(packet_id)
-            logging.info("%d -- %s at node %s, packet id: %s" %
-                         (self.get_time(), event.etype, server.name, str(packet_id)[-3:]))
+            logger.info("%8.3f -- %s at node %s, packet id: %s" %
+                         (self.get_time(), event.etype, server.name, str(packet_id)))
             del event
             server.busy = False
 
@@ -60,8 +72,8 @@ class Simulation:
             # todo: Implement multiple inputs to a server
             input_module = server.inputs[0]['module']
 
-            logging.debug("Server %s asks input %s (len: %d) for more packets" %
-                          (server.name, input_module.name, len(input_module)))
+            logger.debug("%8.3f -- Server %s asks input %s (len: %d) for more packets" %
+                          (self.get_time(), server.name, input_module.name, len(input_module)))
             if type(input_module) == Queue and len(input_module) > 0:
                 new_packet = input_module.pop()
                 event = Event(
@@ -77,8 +89,8 @@ class Simulation:
             source_id = event.get_module_id()
             packet_id = event.get_packet_id()
             source = self.model.get_module(source_id)
-            logging.info("%d -- %s at node %s, packet id: %s" %
-                         (self.get_time(), event.etype, source.name, str(packet_id)[-3:]))
+            logger.info("%8.3f -- %s at node %s, packet id: %s" %
+                         (self.get_time(), event.etype, source.name, str(packet_id)))
             source.generate_packet()
             del event
 
@@ -88,10 +100,10 @@ class Simulation:
             packet_id = event.get_packet_id()
             queue = self.model.get_module(queue_id)
             packet = self.model.get_packet(packet_id)
-            packet.module_id = queue_id
+            packet.set_module(queue_id)
             queue.appendleft(packet)
-            logging.info("%d -- %s at node %s (qlen: %d), packet id: %s" %
-                         (self.get_time(), event.etype, queue.name, len(queue), str(packet_id)[-3:]))
+            logger.info("%8.3f -- %s at node %s (qlen: %d), packet id: %s" %
+                         (self.get_time(), event.etype, queue.name, len(queue), str(packet_id)))
             del event
 
             # if packet is first in the queue, inform the output module of this
@@ -127,7 +139,7 @@ class Simulation:
             packet_id = event.get_packet_id()
             server = self.model.get_module(server_id)
             packet = self.model.get_packet(packet_id)
-            packet.module_id = server_id
+            packet.set_module(server_id)
 
             if not server.busy:
                 server.busy = True
@@ -135,8 +147,8 @@ class Simulation:
             # Schedule service end time
             service_duration = np.random.exponential(1 / server.service_rate)
 
-            logging.info("%d -- %s at node %s, packet id: %s, service duration: %d" %
-                         (self.get_time(), event.etype, server.name, str(packet_id)[-3:], service_duration))
+            logger.info("%8.3f -- %s at node %s, packet id: %s, service duration: %.3f" %
+                         (self.get_time(), event.etype, server.name, str(packet_id), service_duration))
             del event
 
             timestamp = service_duration + self.get_time()
@@ -150,6 +162,10 @@ class Simulation:
 
     def add_model(self, model):
         self.model = model
+        for module in model.get_modules():
+            module.register_with_sim(self)
+        for source in model.get_sources():
+            source.register_with_sim(self)
 
     def get_model(self):
         return self.model
@@ -183,12 +199,15 @@ class Simulation:
             # Process event
             self.process_event(event)
 
+        # End of simulation
+        self.print_summary()
+
 
 class Model:
 
     def __init__(self, name=None):
         self.modules = {}
-        self.packets = {}
+        self.packets = {}  # todo: check if I really need this
         self.sources = {}
         self.destinations = {}
         self.name = name
@@ -202,6 +221,12 @@ class Model:
 
     def get_module(self, module_id):
         return self.modules[module_id]
+
+    def get_modules(self):
+        return list(self.modules.values())
+
+    def get_sources(self):
+        return list(self.sources.values())
 
     def add_packet(self, packet):
         self.packets[id(packet)] = packet
@@ -221,7 +246,7 @@ if __name__ == '__main__':
     q2 = Queue(name='destination')
 
     # Add component's inputs and outputs
-    gen = Source(rate=5, outputs=[{'module': q1, 'prob': 1}], sim=sim, name='gen')
+    gen = Source(rate=5, outputs=[{'module': q1, 'prob': 1}], name='gen')
     q1.outputs = [{'module': s1, 'prob': 1}]
     s1.inputs = [{'module': q1, 'prob': 1}]
     s1.outputs = [{'module': q2, 'prob': 1}]
@@ -233,5 +258,7 @@ if __name__ == '__main__':
     m.add_module(q2)
     m.add_module(gen)
 
+    # Register model with simulation.
+    # This also registers all model's modules with simulation.
     sim.add_model(m)
     sim.run()

@@ -2,6 +2,7 @@ import numpy as np
 from events import Event
 from modules import Packet
 import gsim_utils as gu
+from results import Results
 
 
 class Source:
@@ -25,9 +26,14 @@ class Source:
         self.sim = sim
         self.model = model
         self.name = name
+        self.num_generated = 0
+        self.results = Results()
 
     def register_with_model(self, model):
         self.model = model
+
+    def register_with_sim(self, sim):
+        self.sim = sim
 
     def generate_packet(self):
         """
@@ -50,6 +56,11 @@ class Source:
             generation_time=timestamp
         )
 
+        # Register packet with model and simulation
+        packet.register_with_sim(self.sim)
+        packet.register_with_model(self.model)
+        self.model.add_packet(packet)
+
         # packet generation event
         event1 = Event(
             timestamp=timestamp,
@@ -66,9 +77,7 @@ class Source:
             packet_id=id(packet)
         )
 
-        model = self.sim.get_model()
-        model.add_packet(packet)
-
         self.sim.add_event(event2)
         self.sim.add_event(event1)
+        self.num_generated += 1
 
