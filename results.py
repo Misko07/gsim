@@ -30,7 +30,7 @@ class Results:
             self.packets[pkt_id] = {'arrival': None, 'departure': time}
         self.num_pkts_left += 1
 
-    def print_summary(self):
+    def get_summary(self, add_to_log=True):
 
         pkt_stays = []
         for pkt in self.packets.values():
@@ -44,13 +44,23 @@ class Results:
             mean_stay = None
             mean_stay_str = 'None'
 
-        logger.info("Packets arrived: %d" % self.num_pkts_arrived)
-        logger.info("Packets left: %d" % self.num_pkts_left)
-        logger.info("Mean packet stay: %s" % mean_stay_str)
+        if add_to_log:
+            logger.info("Packets arrived: %d" % self.num_pkts_arrived)
+            logger.info("Packets left: %d" % self.num_pkts_left)
+            logger.info("Mean packet stay: %s" % mean_stay_str)
+
+        results = {'packet_id': [], 'arrival_time': [], 'departure_time': []}
+
         for packet_id, value in self.packets.items():
+            results['packet_id'].append(packet_id)
+            results['arrival_time'].append(value['arrival'])
+            results['departure_time'].append(value['departure'])
+
             arrival_str = "%.3f" % value['arrival'] if value['arrival'] else 'None'
             departure_str = "%.3f" % value['departure'] if value['departure'] else 'None'
-            logger.info("%s : arrival: %s, departure: %s" % (packet_id, arrival_str, departure_str))
+            if add_to_log:
+                logger.info("%s : arrival: %s, departure: %s" % (packet_id, arrival_str, departure_str))
 
+        return results
 
 

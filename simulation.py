@@ -2,8 +2,10 @@ from queue import PriorityQueue
 import gsim_utils as gu
 from modules import Queue, Server
 from generators import Source
+from datetime import datetime
 from events import Event
 import logging.config
+import pandas as pd
 import numpy as np
 import logging
 import os
@@ -24,15 +26,41 @@ class Simulation:
         self.pq = PriorityQueue()
         self.time = 0
 
-    def print_summary(self):
-        logger.info("*** Summary for model %s ***" % self.model.name)
-        logger.info("- " * 30)
-        for module in self.model.get_modules():
-            logger.info('Module: %s' % module.name)
-            logger.info('-' * 30)
-            if hasattr(module, 'results'):
-                module.results.print_summary()
+    def get_summary(self, add_to_log=True):
+
+        if add_to_log:
+            logger.info("*** Summary for model %s ***" % self.model.name)
             logger.info("- " * 30)
+
+        results = {
+            'module_name': [],
+            'module_class': [],
+            'module_id': [],
+            'packet_id': [],
+            'arrival_time': [],
+            'departure_time': []
+        }
+
+        for module in self.model.get_modules():
+            if add_to_log:
+                logger.info('Module: %s' % module.name)
+                logger.info('-' * 30)
+
+            if hasattr(module, 'results'):
+                module_results = module.results.get_summary(add_to_log=add_to_log)
+                results['packet_id'].extend(module_results['packet_id'])
+                results['arrival_time'].extend(module_results['arrival_time'])
+                results['departure_time'].extend(module_results['departure_time'])
+                results['module_class'].extend([module.__class__] * len(module_results.get('packet_id')))
+                results['module_name'].extend([module.name] * len(module_results.get('packet_id')))
+                results['module_id'].extend([id(module)] * len(module_results.get('packet_id')))
+
+            if add_to_log:
+                logger.info("- " * 30)
+
+        df = pd.DataFrame(results, columns=list(results.keys()))
+        datenum = datetime.now().strftime("%y%m%d-%H%M%S")
+        df.to_csv('results_%s.csv' % datenum)
 
     def process_event(self, event):
         # Each event has a module and packet associated with it
@@ -200,7 +228,7 @@ class Simulation:
             self.process_event(event)
 
         # End of simulation
-        self.print_summary()
+        self.get_summary()
 
 
 class Model:
