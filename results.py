@@ -30,7 +30,10 @@ class Results:
             self.packets[pkt_id] = {'arrival': None, 'departure': time}
         self.num_pkts_left += 1
 
-    def get_summary(self, add_to_log=True):
+    def get_scalar_results(self):
+        return self.num_pkts_arrived, self.num_pkts_left
+
+    def get_vector_results(self, add_to_log=True):
 
         pkt_stays = []
         for pkt in self.packets.values():

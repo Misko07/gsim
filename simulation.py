@@ -10,10 +10,6 @@ import numpy as np
 import logging
 import os
 
-
-# if os.path.isfile('logs.log'):
-#     os.unlink('logs.log')
-
 logging.config.fileConfig('logging.conf')
 logger = logging.getLogger('simulation')
 
@@ -32,7 +28,7 @@ class Simulation:
             logger.info("*** Summary for model %s ***" % self.model.name)
             logger.info("- " * 30)
 
-        results = {
+        vector_res = {
             'module_name': [],
             'module_class': [],
             'module_id': [],
@@ -41,26 +37,48 @@ class Simulation:
             'departure_time': []
         }
 
+        scalar_res = {
+            'module_name': [],
+            'module_class': [],
+            'module_id': [],
+            'total_arrivals': [],
+            'total_departures': []
+        }
+
         for module in self.model.get_modules():
             if add_to_log:
                 logger.info('Module: %s' % module.name)
                 logger.info('-' * 30)
 
             if hasattr(module, 'results'):
-                module_results = module.results.get_summary(add_to_log=add_to_log)
-                results['packet_id'].extend(module_results['packet_id'])
-                results['arrival_time'].extend(module_results['arrival_time'])
-                results['departure_time'].extend(module_results['departure_time'])
-                results['module_class'].extend([module.__class__] * len(module_results.get('packet_id')))
-                results['module_name'].extend([module.name] * len(module_results.get('packet_id')))
-                results['module_id'].extend([id(module)] * len(module_results.get('packet_id')))
+                module_vector_res = module.results.get_vector_results(add_to_log=add_to_log)
+                vector_res['packet_id'].extend(module_vector_res['packet_id'])
+                vector_res['arrival_time'].extend(module_vector_res['arrival_time'])
+                vector_res['departure_time'].extend(module_vector_res['departure_time'])
+                vector_res['module_class'].extend([module.__class__] * len(module_vector_res.get('packet_id')))
+                vector_res['module_name'].extend([module.name] * len(module_vector_res.get('packet_id')))
+                vector_res['module_id'].extend([id(module)] * len(module_vector_res.get('packet_id')))
+
+                module_scalar_res = module.results.get_scalar_results()
+                scalar_res['module_name'].append(module.name)
+                scalar_res['module_id'].append(id(module))
+                scalar_res['module_class'].append(module.__class__)
+                scalar_res['total_arrivals'].append(module_scalar_res[0])
+                scalar_res['total_departures'].append(module_scalar_res[1])
 
             if add_to_log:
                 logger.info("- " * 30)
 
-        df = pd.DataFrame(results, columns=list(results.keys()))
+        # Create Dataframes for results
+        df_vector = pd.DataFrame(vector_res, columns=list(vector_res.keys()))
+        df_scalar = pd.DataFrame(scalar_res, columns=list(scalar_res.keys()))
+
+        # Save results to csv
+        if not os.path.isdir('results'):
+            os.mkdir('results')
         datenum = datetime.now().strftime("%y%m%d-%H%M%S")
-        df.to_csv('results_%s.csv' % datenum)
+        df_vector.to_csv('results/vec-%s.csv' % datenum)
+        df_scalar.to_csv('results/sca-%s.csv' % datenum)
 
     def process_event(self, event):
         # Each event has a module and packet associated with it
@@ -209,6 +227,8 @@ class Simulation:
 
     def run(self):
 
+        print("Simulation running..")
+
         # Start data generators
         model = self.model
         for _, source in model.sources.items():
@@ -265,25 +285,28 @@ class Model:
 
 if __name__ == '__main__':
 
-    sim = Simulation(duration=50)
+    sim = Simulation(duration=5000)
     m = Model(name='model1')
 
     # Declare model's components
     q1 = Queue(name='q1')
+    q2 = Queue(name='q2')
     s1 = Server(name='s1', service_rate=0.2)
-    q2 = Queue(name='destination')
+    q3 = Queue(name='destination')
 
     # Add component's inputs and outputs
     gen = Source(rate=5, outputs=[{'module': q1, 'prob': 1}], name='gen')
-    q1.outputs = [{'module': s1, 'prob': 1}]
-    s1.inputs = [{'module': q1, 'prob': 1}]
-    s1.outputs = [{'module': q2, 'prob': 1}]
+    q1.outputs = [{'module': q2, 'prob': 1}]
+    q2.outputs = [{'module': s1, 'prob': 1}]
+    s1.inputs = [{'module': q2, 'prob': 1}]
+    s1.outputs = [{'module': q3, 'prob': 1}]
 
     # Register components to model
     m = Model()
     m.add_module(q1)
-    m.add_module(s1)
     m.add_module(q2)
+    m.add_module(s1)
+    m.add_module(q3)
     m.add_module(gen)
 
     # Register model with simulation.
