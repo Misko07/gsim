@@ -14,35 +14,45 @@ def get_data_utilisation(results_file, module_id=None, module_name=None):
     df = df.astype({'module_id': str, 'packet_id': str})
 
     if module_id:
-        data = df.loc[df['module_id'] == module_id]
+        data_normal = df.loc[(df['module_id'] == module_id) & (df['malicious'] is False)]
+        data_malicious = df.loc[(df['module_id'] == module_id) & (df['malicious'] is False)]
     elif module_name:
-        data = df.loc[df['module_name'] == module_name]
+        data_normal = df.loc[(df['module_name'] == module_name) & (df['malicious'] is False)]
+        data_malicious = df.loc[(df['module_name'] == module_name) & (df['malicious'] is True)]
 
-    events1 = pd.DataFrame()
-    events1['time'] = data['arrival_time']
-    events1['packets'] = [1] * len(data)
+    # todo: continue from here - track both malicious and normal data
+    # arrivals
+    arrivals_normal = pd.DataFrame()
+    arrivals_normal['time'] = data_normal['arrival_time']
+    arrivals_normal['packets'] = [1] * len(data_normal)
 
-    events2 = pd.DataFrame()
-    events2['time'] = data['departure_time']
-    events2['packets'] = [-1] * len(data)
+    # departures
+    departures_normal = pd.DataFrame()
+    departures_normal['time'] = data_normal['departure_time']
+    departures_normal['packets'] = [-1] * len(data_normal)
 
-    events = events1.merge(events2, how='outer')
+    events = arrivals_normal.merge(departures_normal, how='outer')
     events.sort_values(by='time', inplace=True)
 
     # sum up total packets in the module
-    sum_pkts = []
+    data_util = {'time': [], 'sum_pkts': []}
     sum_ = 0
+    prev_time = 0
     for i in range(len(events)):
         event = events.iloc[i]
         val = event.packets
-        time = event.time
-        if str(time) != 'nan':
+        time_ = event.time
+        if time_ != prev_time:
+            data_util['sum_pkts'].append(sum_)
+            data_util['time'].append(prev_time)
+        if str(time_) != 'nan':
             sum_ += val
-        sum_pkts.append(sum_)
+        prev_time = time_
 
-    events['sum_pkts'] = sum_pkts
+    events_fin = pd.DataFrame(data_util, columns=list(data_util.keys()))
+    # events_fin.to_csv('results/vec_%s.csv' % module_name)
 
-    return events
+    return events_fin
 
 
 def plot_module_utilisation(results_file, module_id=None, module_name=None):
@@ -67,5 +77,5 @@ def plot_module_utilisation(results_file, module_id=None, module_name=None):
 
 
 if __name__ == '__main__':
-    plot_module_utilisation(results_file='results_190404-140011.csv', module_name='s1')  #, module_id='2726695503576')
+    plot_module_utilisation(results_file='results/vec-190404-143933.csv', module_id='2530220349256')  #  module_name='q2'
 

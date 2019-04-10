@@ -75,10 +75,10 @@ class Packet:
         old_module_id = self.module_id
         old_module = self.model.get_module(old_module_id)
         if hasattr(old_module, 'results'):
-            old_module.results.add_packet_departure(id(self), self.sim.get_time())
+            old_module.results.add_packet_departure(id(self), self.sim.get_time(), self.is_malicious())
         new_module = self.model.get_module(module_id)
         if hasattr(new_module, 'results'):
-            new_module.results.add_packet_arrival(id(self), self.sim.get_time())
+            new_module.results.add_packet_arrival(id(self), self.sim.get_time(), self.is_malicious())
         self.module_id = module_id
 
     def copy(self):

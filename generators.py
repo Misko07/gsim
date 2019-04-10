@@ -50,11 +50,13 @@ class Source:
         # Create packet
         packet = Packet(
             size=None,
-            malicious=np.random.choice([True, False], 1, p=[self.attack_prob, 1-self.attack_prob]),
+            malicious=np.random.choice([True, False], 1, p=[self.attack_prob, 1-self.attack_prob])[0],
             active=True,
             module_id=id(self),
             generation_time=timestamp
         )
+
+        print(packet.is_malicious())
 
         # Register packet with model and simulation
         packet.register_with_sim(self.sim)

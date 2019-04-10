@@ -18,16 +18,17 @@ class Results:
         self.num_pkts_left = 0
         self.packets = {}
 
-    def add_packet_arrival(self, pkt_id, time):
-        self.packets[pkt_id] = {'arrival': time, 'departure': None}
+    def add_packet_arrival(self, pkt_id, time, malicious):
+        self.packets[pkt_id] = {'arrival': time, 'departure': None, 'malicious': malicious}
         self.num_pkts_arrived += 1
 
-    def add_packet_departure(self, pkt_id, time):
+    def add_packet_departure(self, pkt_id, time, malicious):
         if pkt_id in self.packets:
             self.packets[pkt_id]['departure'] = time
+            self.packets[pkt_id]['malicious'] = malicious
         else:
             # Packet generator modules don't have arrivals
-            self.packets[pkt_id] = {'arrival': None, 'departure': time}
+            self.packets[pkt_id] = {'arrival': None, 'departure': time, 'malicious': malicious}
         self.num_pkts_left += 1
 
     def get_scalar_results(self):
@@ -52,12 +53,13 @@ class Results:
             logger.info("Packets left: %d" % self.num_pkts_left)
             logger.info("Mean packet stay: %s" % mean_stay_str)
 
-        results = {'packet_id': [], 'arrival_time': [], 'departure_time': []}
+        results = {'packet_id': [], 'arrival_time': [], 'departure_time': [], 'malicious': []}
 
         for packet_id, value in self.packets.items():
             results['packet_id'].append(packet_id)
             results['arrival_time'].append(value['arrival'])
             results['departure_time'].append(value['departure'])
+            results['malicious'].append(value['malicious'])
 
             arrival_str = "%.3f" % value['arrival'] if value['arrival'] else 'None'
             departure_str = "%.3f" % value['departure'] if value['departure'] else 'None'

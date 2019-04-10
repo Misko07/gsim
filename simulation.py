@@ -34,7 +34,8 @@ class Simulation:
             'module_id': [],
             'packet_id': [],
             'arrival_time': [],
-            'departure_time': []
+            'departure_time': [],
+            'malicious': []
         }
 
         scalar_res = {
@@ -55,6 +56,7 @@ class Simulation:
                 vector_res['packet_id'].extend(module_vector_res['packet_id'])
                 vector_res['arrival_time'].extend(module_vector_res['arrival_time'])
                 vector_res['departure_time'].extend(module_vector_res['departure_time'])
+                vector_res['malicious'].extend(module_vector_res['malicious'])
                 vector_res['module_class'].extend([module.__class__] * len(module_vector_res.get('packet_id')))
                 vector_res['module_name'].extend([module.name] * len(module_vector_res.get('packet_id')))
                 vector_res['module_id'].extend([id(module)] * len(module_vector_res.get('packet_id')))
@@ -295,7 +297,7 @@ if __name__ == '__main__':
     q3 = Queue(name='destination')
 
     # Add component's inputs and outputs
-    gen = Source(rate=5, outputs=[{'module': q1, 'prob': 1}], name='gen')
+    gen = Source(rate=5, attack_prob=0.3, outputs=[{'module': q1, 'prob': 1}], name='gen')
     q1.outputs = [{'module': q2, 'prob': 1}]
     q2.outputs = [{'module': s1, 'prob': 1}]
     s1.inputs = [{'module': q2, 'prob': 1}]
