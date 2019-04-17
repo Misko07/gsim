@@ -55,10 +55,11 @@ class Server:
 
 class Packet:
 
-    def __init__(self, model=None, sim=None, size=None, malicious=False, active=True, module_id=None, generation_time=None, name=None):
+    def __init__(self, model=None, sim=None, size=None, malicious=False, detected=None, active=True, module_id=None, generation_time=None, name=None):
         self.model = model
         self.sim = sim
         self.__malicious = malicious
+        self.detected = detected
         self.__size = size
         self.active = active  # inactive when reaches destination
         self.module_id = module_id  # the current module it's in
@@ -83,6 +84,37 @@ class Packet:
 
     def copy(self):
         return Packet(self.__size, self.__malicious, self.active, self.module_id, self.packet_id)
+
+    def register_with_model(self, model):
+        self.model = model
+
+    def register_with_sim(self, sim):
+        self.sim = sim
+
+
+class AnomalyDetector:
+
+    def __init__(self, tp_rate, fp_rate, inputs=None, outputs=None, outputs_detected=None, service_rate=None, model=None, sim=None, name=None, busy=None):
+        self.tp_rate = tp_rate
+        self.fp_rate = fp_rate
+        self.model = model
+        self.sim = sim
+        self.inputs = inputs
+        self.outputs = outputs
+        self.outputs_detected = outputs_detected
+        self.service_rate = service_rate
+        self.name = name
+        self.busy = busy
+        self.results = Results()
+
+    def set_inputs(self, inputs):
+        self.inputs = inputs
+
+    def set_outputs(self, outputs):
+        self.outputs = outputs
+
+    def set_service_rate(self, service_rate):
+        self.service_rate = service_rate
 
     def register_with_model(self, model):
         self.model = model

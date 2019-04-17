@@ -25,3 +25,8 @@ class Event:
     def get_timestamp(self):
         return self.__timestamp
 
+# Todo: implement etypes
+# ETYPES = [
+#
+# ]
+

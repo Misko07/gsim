@@ -2,7 +2,12 @@ import numpy as np
 from events import Event
 from modules import Packet
 import gsim_utils as gu
+import logging
 from results import Results
+
+
+logging.config.fileConfig("logging.conf")
+logger = logging.getLogger('generators')
 
 
 class Source:
@@ -10,7 +15,7 @@ class Source:
     A source generates Packets
     """
 
-    def __init__(self, rate, outputs, distribution='Poisson', attack_prob=0, sim=None, model=None, name=None):
+    def __init__(self, rate, outputs=None, distribution='Poisson', attack_prob=0, sim=None, model=None, name=None):
         """
         Constructor
 
@@ -44,9 +49,6 @@ class Source:
         # Timestamp of next packet generation
         timestamp = self.sim.get_time() + np.random.poisson(self.rate, 1)[0]
 
-        # Choose a destination module for the packet
-        destination = gu.choose_output(self.outputs)
-
         # Create packet
         packet = Packet(
             size=None,
@@ -55,8 +57,6 @@ class Source:
             module_id=id(self),
             generation_time=timestamp
         )
-
-        print(packet.is_malicious())
 
         # Register packet with model and simulation
         packet.register_with_sim(self.sim)
@@ -70,6 +70,16 @@ class Source:
             module_id=id(self),
             packet_id=id(packet)
         )
+
+        # Choose a destination module for the packet
+        destination = gu.choose_output(self.outputs)
+
+        if destination is None:
+            # This should never happen
+            logger.error("%8.3f -- %s at node %s, packet id: %s - Destination not found!" %
+                         (self.get_time(), event1.etype, self.name, str(id(packet))))
+            raise TypeError("Destination not found in outputs of node %s. Make sure there's a Queue as output." %
+                            self.name)
 
         # packet arrival event (at the module connected as output to the source)
         event2 = Event(

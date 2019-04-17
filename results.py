@@ -16,11 +16,19 @@ class Results:
 
         self.num_pkts_arrived = 0
         self.num_pkts_left = 0
+        self.num_malicious_arrived = 0
+        self.num_normal_arrived = 0
+        self.num_malicious_left = 0
+        self.num_normal_left = 0
         self.packets = {}
 
     def add_packet_arrival(self, pkt_id, time, malicious):
         self.packets[pkt_id] = {'arrival': time, 'departure': None, 'malicious': malicious}
         self.num_pkts_arrived += 1
+        if malicious:
+            self.num_malicious_arrived += 1
+        else:
+            self.num_normal_arrived += 1
 
     def add_packet_departure(self, pkt_id, time, malicious):
         if pkt_id in self.packets:
@@ -30,9 +38,18 @@ class Results:
             # Packet generator modules don't have arrivals
             self.packets[pkt_id] = {'arrival': None, 'departure': time, 'malicious': malicious}
         self.num_pkts_left += 1
+        if malicious:
+            self.num_malicious_left += 1
+        else:
+            self.num_normal_left += 1
 
     def get_scalar_results(self):
-        return self.num_pkts_arrived, self.num_pkts_left
+        return self.num_pkts_arrived, \
+               self.num_pkts_left, \
+               self.num_normal_arrived, \
+               self.num_normal_left, \
+               self.num_malicious_arrived, \
+               self.num_malicious_left
 
     def get_vector_results(self, add_to_log=True):
 
