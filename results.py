@@ -16,10 +16,10 @@ class Results:
 
         self.num_pkts_arrived = 0
         self.num_pkts_left = 0
-        self.num_malicious_arrived = 0
         self.num_normal_arrived = 0
-        self.num_malicious_left = 0
         self.num_normal_left = 0
+        self.num_malicious_arrived = 0
+        self.num_malicious_left = 0
         self.packets = {}
 
     def add_packet_arrival(self, pkt_id, time, malicious):

@@ -10,7 +10,8 @@ logger = logging.getLogger('utils')
 
 def choose_output(outputs):
     """
-    Choose a destination module for the packet
+    Choose a destination module for a packet, out of a list of output modules - according to a probability distribution
+    for each of them, and if they're not busy
 
     :param outputs:
     :return:

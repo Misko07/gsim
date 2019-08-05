@@ -55,7 +55,8 @@ class Server:
 
 class Packet:
 
-    def __init__(self, model=None, sim=None, size=None, malicious=False, detected=None, active=True, module_id=None, generation_time=None, name=None):
+    def __init__(self, model=None, sim=None, size=None, malicious=False, detected=None, active=True, module_id=None,
+                 generation_time=None, name=None):
         self.model = model
         self.sim = sim
         self.__malicious = malicious
@@ -94,7 +95,8 @@ class Packet:
 
 class AnomalyDetector:
 
-    def __init__(self, tp_rate, fp_rate, inputs=None, outputs=None, outputs_detected=None, service_rate=None, model=None, sim=None, name=None, busy=None):
+    def __init__(self, tp_rate, fp_rate, inputs=None, outputs=None, outputs_detected=None, service_rate=None,
+                 model=None, sim=None, name=None, busy=None):
         self.tp_rate = tp_rate
         self.fp_rate = fp_rate
         self.model = model
@@ -123,4 +125,4 @@ class AnomalyDetector:
         self.sim = sim
 
 
-
+# Todo: Add a 'Module' class and all other modules will inherit of it

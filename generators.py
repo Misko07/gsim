@@ -46,6 +46,8 @@ class Source:
         :return: /
         """
 
+        # Todo: some of the events stuff below might need to be moved to simulation.process_event
+
         # Timestamp of next packet generation
         timestamp = self.sim.get_time() + np.random.poisson(self.rate, 1)[0]
 

@@ -118,6 +118,7 @@ class Simulation:
                 raise TypeError("Destination not found in outputs of node %s. Make sure there's a Queue as output." %
                                 module_.name)
 
+            # Put new event in priority queue
             event = gu.create_event(destination, self.get_time(), packet_id)
             self.add_event(event)
 
