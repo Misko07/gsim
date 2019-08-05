@@ -1,9 +1,10 @@
-import numpy as np
-from events import Event
-from modules import Packet
-import gsim_utils as gu
-import logging
 from results import Results
+from packets import Packet, PacketType
+from events import Event
+import gsim_utils as gu
+
+import numpy as np
+import logging
 
 
 logging.config.fileConfig("logging.conf")
@@ -52,9 +53,9 @@ class Source:
         timestamp = self.sim.get_time() + np.random.poisson(self.rate, 1)[0]
 
         # Create packet
+        malicious = np.random.choice([True, False], 1, p=[self.attack_prob, 1 - self.attack_prob])[0],
         packet = Packet(
-            size=None,
-            malicious=np.random.choice([True, False], 1, p=[self.attack_prob, 1-self.attack_prob])[0],
+            type=PacketType.MALICIOUS if malicious else PacketType.NORMAL,
             active=True,
             module_id=id(self),
             generation_time=timestamp
@@ -66,7 +67,7 @@ class Source:
         self.model.add_packet(packet)
 
         # packet generation event
-        event1 = Event(
+        event_generation = Event(
             timestamp=timestamp,
             etype='PACKET_GENERATION',
             module_id=id(self),
@@ -79,19 +80,19 @@ class Source:
         if destination is None:
             # This should never happen
             logger.error("%8.3f -- %s at node %s, packet id: %s - Destination not found!" %
-                         (self.get_time(), event1.etype, self.name, str(id(packet))))
+                         (self.get_time(), event_generation.etype, self.name, str(id(packet))))
             raise TypeError("Destination not found in outputs of node %s. Make sure there's a Queue as output." %
                             self.name)
 
         # packet arrival event (at the module connected as output to the source)
-        event2 = Event(
+        event_arrival = Event(
             timestamp=timestamp,
             etype='QUEUE_PACKET_ARRIVAL',
             module_id=id(destination),
             packet_id=id(packet)
         )
 
-        self.sim.add_event(event2)
-        self.sim.add_event(event1)
+        self.sim.add_event(event_arrival)
+        self.sim.add_event(event_generation)
         self.num_generated += 1
 

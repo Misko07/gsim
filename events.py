@@ -1,3 +1,15 @@
+from enum import Enum
+
+
+class EventType(Enum):
+    SERVICE_COMPLETE = 0
+    DETECTOR_SERVICE_COMPLETE = 1
+    PACKET_GENERATION = 2
+    QUEUE_PACKET_ARRIVAL = 3
+    QUEUE_NEG_PACKET_ARRIVAL = 4
+    SERVER_PACKET_ARRIVAL = 5
+    DETECTOR_PACKET_ARRIVAL = 6
+
 
 class Event:
 

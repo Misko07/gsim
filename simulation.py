@@ -1,9 +1,10 @@
 from queue import PriorityQueue
 import gsim_utils as gu
 from modules import Queue, Server, AnomalyDetector
+from events import Event, EventType
+from packets import PacketType
 from generators import Source
 from datetime import datetime
-from events import Event
 import logging.config
 import pandas as pd
 import numpy as np
@@ -102,7 +103,7 @@ class Simulation:
             raise ValueError("Module with id %s not found! Check if all modules are registered with model using "
                              "`model.add_module()`." % module_id)
 
-        if event.etype == 'SERVICE_COMPLETE':
+        if event.etype == EventType.SERVICE_COMPLETE:
 
             logger.info("%8.3f -- %s at node %s, packet id: %s" %
                         (self.get_time(), event.etype, module_.name, str(packet_id)))
@@ -135,13 +136,15 @@ class Simulation:
                 event = gu.create_event(module_, self.get_time(), id(new_packet))
                 self.add_event(event)
 
-        elif event.etype == 'DETECTOR_SERVICE_COMPLETE':
+        elif event.etype == EventType.DETECTOR_SERVICE_COMPLETE:
 
             # Make a decision on malicious packet detection
             if packet.is_malicious():
                 detect_prob = module_.tp_rate
-            else:
+            elif packet.is_normal():
                 detect_prob = module_.fp_rate
+            else:
+                raise ValueError("Invalid packet type!")
 
             decision_attack = np.random.choice([True, False], 1, p=[detect_prob, 1-detect_prob])[0]
             packet.detected = decision_attack
@@ -179,31 +182,56 @@ class Simulation:
                 event = gu.create_event(module_, self.get_time(), id(new_packet))
                 self.add_event(event)
 
-        elif event.etype == 'PACKET_GENERATION':
+        elif event.etype == EventType.PACKET_GENERATION:
             # generate a new packet
             logger.info("%8.3f -- %s at node %s, packet id: %s" %
                         (self.get_time(), event.etype, module_.name, str(packet_id)))
             module_.generate_packet()
             del event
 
-        elif event.etype == 'QUEUE_PACKET_ARRIVAL':
+        elif event.etype == EventType.QUEUE_PACKET_ARRIVAL:
             # A packet has arrived in a queue
             packet.set_module(module_id)
-            module_.appendleft(packet)
-            logger.info("%8.3f -- %s at node %s (qlen: %d), packet id: %s" %
-                        (self.get_time(), event.etype, module_.name, len(module_), str(packet_id)))
-            del event
 
-            # if packet is first in the queue, inform the output module of this
-            if len(module_) == 1:
-                destination = gu.choose_output(module_.outputs)
-                if destination:
-                    # Forward packet to destination if not busy, otherwise do nothing
-                    event = gu.create_event(destination, self.get_time(), packet_id)
-                    self.add_event(event)
-                    module_.pop()
+            # If packet is Data packet (NORMAL, MALICIOUS), or PERMIT
+            if packet.type != PacketType.NEG_SIGNAL:
+                module_.appendleft(packet)
+                logger.info("%8.3f -- %s at node %s (qlen: %d), packet id: %s, type: %s" %
+                            (self.get_time(), event.etype, module_.name, len(module_), str(packet_id), packet.type))
+                del event
 
-        elif event.etype == 'SERVER_PACKET_ARRIVAL' or event.etype == 'DETECTOR_PACKET_ARRIVAL':
+                # if packet is first in the queue, inform the output module of this
+                if len(module_) == 1:
+                    destination = gu.choose_output(module_.outputs)
+                    if destination:
+                        # Forward packet to destination if not busy, otherwise do nothing
+                        event = gu.create_event(destination, self.get_time(), packet_id)
+                        self.add_event(event)
+                        module_.pop()
+
+            # If by mistake packet is NEG_SIGNAL
+            else:
+                raise ValueError("Negative packet received as QUEUE_PACKET_ARRIVAL event!")
+
+        elif event.etype == EventType.QUEUE_NEG_PACKET_ARRIVAL:
+            # A negative signal has arrived in a queue
+            packet.set_module(module_id)
+
+            if packet.type == PacketType.NEG_SIGNAL:
+                # Remove packet.pkts_to_remove pakets from back of queue
+                for i in range(packet.pkts_to_remove):
+                    if len(module_) > 0:
+                        _ = module_.popleft()
+                del event
+
+                logger.info("%8.3f -- %s at node %s (qlen: %d), packet id: %s, type: %s" %
+                            (self.get_time(), event.etype, module_.name, len(module_), str(packet_id), packet.type))
+
+            # If by mistake packet is not NEG_SIGNAL
+            else:
+                raise ValueError("Data / Permit packet received as QUEUE_NEG_PACKET_ARRIVAL event!")
+
+        elif event.etype == EventType.SERVER_PACKET_ARRIVAL or event.etype == EventType.DETECTOR_PACKET_ARRIVAL:
             # A packet has arrived in a server or anomaly detector
             packet.set_module(module_id)
             if not module_.busy:
@@ -216,9 +244,9 @@ class Simulation:
                         (self.get_time(), event.etype, module_.name, str(packet_id), service_duration))
 
             timestamp = service_duration + self.get_time()
-            etype = 'SERVICE_COMPLETE'
-            if event.etype == 'DETECTOR_PACKET_ARRIVAL':
-                etype = 'DETECTOR_SERVICE_COMPLETE'
+            etype = EventType.SERVICE_COMPLETE
+            if event.etype == EventType.DETECTOR_PACKET_ARRIVAL:
+                etype = EventType.DETECTOR_SERVICE_COMPLETE
             del event
 
             event = Event(

@@ -1,9 +1,5 @@
-
-import queue
 from results import Results
 
-# Queue = queue.Queue
-# PriorityQueue = queue.Queue
 from collections import deque
 
 
@@ -45,46 +41,6 @@ class Server:
 
     def set_service_rate(self, service_rate):
         self.service_rate = service_rate
-
-    def register_with_model(self, model):
-        self.model = model
-
-    def register_with_sim(self, sim):
-        self.sim = sim
-
-
-class Packet:
-
-    def __init__(self, model=None, sim=None, size=None, malicious=False, detected=None, active=True, module_id=None,
-                 generation_time=None, name=None):
-        self.model = model
-        self.sim = sim
-        self.__malicious = malicious
-        self.detected = detected
-        self.__size = size
-        self.active = active  # inactive when reaches destination
-        self.module_id = module_id  # the current module it's in
-        self.generation_time = generation_time
-        self.name = name
-
-    def get_size(self):
-        return self.__size
-
-    def is_malicious(self):
-        return self.__malicious
-
-    def set_module(self, module_id):
-        old_module_id = self.module_id
-        old_module = self.model.get_module(old_module_id)
-        if hasattr(old_module, 'results'):
-            old_module.results.add_packet_departure(id(self), self.sim.get_time(), self.is_malicious())
-        new_module = self.model.get_module(module_id)
-        if hasattr(new_module, 'results'):
-            new_module.results.add_packet_arrival(id(self), self.sim.get_time(), self.is_malicious())
-        self.module_id = module_id
-
-    def copy(self):
-        return Packet(self.__size, self.__malicious, self.active, self.module_id, self.packet_id)
 
     def register_with_model(self, model):
         self.model = model
