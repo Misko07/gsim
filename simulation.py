@@ -1,9 +1,17 @@
+"""
+This file contains the classes for `simulation` and `model`.
+A `simulation` object runs the engine of the simulator, looping through events.
+A `model` object is needed to keep track of all modules and packets in the simulation.
+"""
+
+from gsim.modules import Queue, Server, AnomalyDetector
+from gsim.events import Event, EventType
+from gsim.packets import PacketType
+from gsim.generators import Source
+from gsim.configs import ROOT_DIR
+import gsim.gsim_utils as gu
+
 from queue import PriorityQueue
-import gsim_utils as gu
-from modules import Queue, Server, AnomalyDetector
-from events import Event, EventType
-from packets import PacketType
-from generators import Source
 from datetime import datetime
 import logging.config
 import pandas as pd
@@ -22,74 +30,6 @@ class Simulation:
         self.model = model
         self.pq = PriorityQueue()
         self.time = 0
-
-    def get_summary(self, add_to_log=True):
-
-        if add_to_log:
-            logger.info("*** Summary for model %s ***" % self.model.name)
-            logger.info("- " * 30)
-
-        vector_res = {
-            'module_name': [],
-            'module_class': [],
-            'module_id': [],
-            'packet_id': [],
-            'arrival_time': [],
-            'departure_time': [],
-            'malicious': []
-        }
-
-        scalar_res = {
-            'module_name': [],
-            'module_class': [],
-            'module_id': [],
-            'total_arrivals': [],
-            'total_departures': [],
-            'normal_arrivals': [],
-            'normal_departures': [],
-            'attack_arrivals': [],
-            'attack_departures': []
-        }
-
-        for module in self.model.get_modules():
-            if add_to_log:
-                logger.info('Module: %s' % module.name)
-                logger.info('-' * 30)
-
-            if hasattr(module, 'results'):
-                module_vector_res = module.results.get_vector_results(add_to_log=add_to_log)
-                vector_res['packet_id'].extend(module_vector_res['packet_id'])
-                vector_res['arrival_time'].extend(module_vector_res['arrival_time'])
-                vector_res['departure_time'].extend(module_vector_res['departure_time'])
-                vector_res['malicious'].extend(module_vector_res['malicious'])
-                vector_res['module_class'].extend([module.__class__] * len(module_vector_res.get('packet_id')))
-                vector_res['module_name'].extend([module.name] * len(module_vector_res.get('packet_id')))
-                vector_res['module_id'].extend([id(module)] * len(module_vector_res.get('packet_id')))
-
-                module_scalar_res = module.results.get_scalar_results()
-                scalar_res['module_name'].append(module.name)
-                scalar_res['module_id'].append(id(module))
-                scalar_res['module_class'].append(module.__class__)
-                scalar_res['total_arrivals'].append(module_scalar_res[0])
-                scalar_res['total_departures'].append(module_scalar_res[1])
-                scalar_res['normal_arrivals'].append(module_scalar_res[2])
-                scalar_res['normal_departures'].append(module_scalar_res[3])
-                scalar_res['attack_arrivals'].append(module_scalar_res[4])
-                scalar_res['attack_departures'].append(module_scalar_res[5])
-
-            if add_to_log:
-                logger.info("- " * 30)
-
-        # Create Dataframes for results
-        df_vector = pd.DataFrame(vector_res, columns=list(vector_res.keys()))
-        df_scalar = pd.DataFrame(scalar_res, columns=list(scalar_res.keys()))
-
-        # Save results to csv
-        if not os.path.isdir('results'):
-            os.mkdir('results')
-        datenum = datetime.now().strftime("%y%m%d-%H%M%S")
-        df_vector.to_csv('results/vec-%s.csv' % datenum)
-        df_scalar.to_csv('results/sca-%s.csv' % datenum)
 
     def process_event(self, event):
 
@@ -194,10 +134,10 @@ class Simulation:
             packet.set_module(module_id)
 
             # If packet is Data packet (NORMAL, MALICIOUS), or PERMIT
-            if packet.type != PacketType.NEG_SIGNAL:
+            if packet.ptype != PacketType.NEG_SIGNAL:
                 module_.appendleft(packet)
                 logger.info("%8.3f -- %s at node %s (qlen: %d), packet id: %s, type: %s" %
-                            (self.get_time(), event.etype, module_.name, len(module_), str(packet_id), packet.type))
+                            (self.get_time(), event.etype, module_.name, len(module_), str(packet_id), packet.ptype))
                 del event
 
                 # if packet is first in the queue, inform the output module of this
@@ -217,15 +157,21 @@ class Simulation:
             # A negative signal has arrived in a queue
             packet.set_module(module_id)
 
-            if packet.type == PacketType.NEG_SIGNAL:
+            if packet.ptype == PacketType.NEG_SIGNAL:
                 # Remove packet.pkts_to_remove pakets from back of queue
+                num_removed = 0
                 for i in range(packet.pkts_to_remove):
                     if len(module_) > 0:
-                        _ = module_.popleft()
+                        removed_pkt = module_.popleft()
+                        module_.results.add_packet_removal(id(removed_pkt), self.get_time(), removed_pkt.type)
+                        num_removed += 1
                 del event
 
                 logger.info("%8.3f -- %s at node %s (qlen: %d), packet id: %s, type: %s" %
-                            (self.get_time(), event.etype, module_.name, len(module_), str(packet_id), packet.type))
+                            (self.get_time(), event.etype, module_.name, len(module_), str(packet_id), packet.ptype))
+                logger.info("%8.3f -- %s at node %s: %d packets removed (qlen: %d -> %d)" %
+                            (self.get_time(), event.etype, module_.name, num_removed, len(module_) + num_removed,
+                             len(module_)))
 
             # If by mistake packet is not NEG_SIGNAL
             else:
@@ -233,6 +179,7 @@ class Simulation:
 
         elif event.etype == EventType.SERVER_PACKET_ARRIVAL or event.etype == EventType.DETECTOR_PACKET_ARRIVAL:
             # A packet has arrived in a server or anomaly detector
+            # Todo: What if neg-signal or permit packet arrive here?
             packet.set_module(module_id)
             if not module_.busy:
                 module_.busy = True
@@ -256,6 +203,96 @@ class Simulation:
                 packet_id=packet_id
             )
             self.add_event(event)
+
+    def get_summary(self):
+
+        vector_res = {
+            'module_name': [],
+            'module_class': [],
+            'module_id': [],
+            'packet_id': [],
+            'arrival_time': [],
+            'departure_time': [],
+            'removal_time': [],
+            'malicious': [],
+            'neg_signal': [],
+            'permit': []
+        }
+
+        scalar_res = {
+            'module_name': [],
+            'module_class': [],
+            'module_id': [],
+            'total_arrivals': [],
+            'total_departures': [],
+            'normal_arrivals': [],
+            'normal_departures': [],
+            'attack_arrivals': [],
+            'attack_departures': [],
+            'permit_arrivals': [],
+            'permit_departures': [],
+            'neg_signal_arrivals': [],
+            'neg_signal_departures': [],
+            'normal_removals': [],
+            'attack_removals': [],
+            'permit_removals': [],
+            'mean_waittime_normal': [],
+            'mean_waittime_permit': []
+        }
+
+        for module in self.model.get_modules():
+            if hasattr(module, 'results'):
+
+                # Get vector results
+                module_vector_res = module.results.get_vector_results()
+                assert(len(module_vector_res.keys()) == 7)
+
+                vector_res['packet_id'].extend(module_vector_res['packet_id'])
+                vector_res['arrival_time'].extend(module_vector_res['arrival_time'])
+                vector_res['departure_time'].extend(module_vector_res['departure_time'])
+                vector_res['removal_time'].extend(module_vector_res['removal_time'])
+                vector_res['malicious'].extend(module_vector_res['malicious'])
+                vector_res['permit'].extend(module_vector_res['permit'])
+                vector_res['neg_signal'].extend(module_vector_res['negative'])
+                vector_res['module_class'].extend([module.__class__] * len(module_vector_res.get('packet_id')))
+                vector_res['module_name'].extend([module.name] * len(module_vector_res.get('packet_id')))
+                vector_res['module_id'].extend([id(module)] * len(module_vector_res.get('packet_id')))
+
+                # Get scalar results
+                module_scalar_res = module.results.get_scalar_results()
+                assert(len(module_scalar_res) == 15)
+
+                scalar_res['module_name'].append(module.name)
+                scalar_res['module_id'].append(id(module))
+                scalar_res['module_class'].append(module.__class__)
+                scalar_res['total_arrivals'].append(module_scalar_res[0])
+                scalar_res['total_departures'].append(module_scalar_res[1])
+                scalar_res['normal_arrivals'].append(module_scalar_res[2])
+                scalar_res['normal_departures'].append(module_scalar_res[3])
+                scalar_res['attack_arrivals'].append(module_scalar_res[4])
+                scalar_res['attack_departures'].append(module_scalar_res[5])
+                scalar_res['permit_arrivals'].append(module_scalar_res[6])
+                scalar_res['permit_departures'].append(module_scalar_res[7])
+                scalar_res['neg_signal_arrivals'].append(module_scalar_res[8])
+                scalar_res['neg_signal_departures'].append(module_scalar_res[9])
+                scalar_res['normal_removals'].append(module_scalar_res[10])
+                scalar_res['attack_removals'].append(module_scalar_res[11])
+                scalar_res['permit_removals'].append(module_scalar_res[12])
+                scalar_res['mean_waittime_normal'].append(module_scalar_res[13])
+                scalar_res['mean_waittime_permit'].append(module_scalar_res[14])
+
+        # Create Dataframes for results
+        df_vector = pd.DataFrame(vector_res, columns=list(vector_res.keys()))
+        df_scalar = pd.DataFrame(scalar_res, columns=list(scalar_res.keys()))
+
+        # Save results to csv
+        results_path = os.path.join(ROOT_DIR, 'results')
+        if not os.path.isdir(results_path):
+            os.mkdir(results_path)
+        datenum = datetime.now().strftime("%y%m%d-%H%M%S")
+        df_vector.to_csv(os.path.join(results_path, 'vec-%s.csv' % datenum))
+        df_scalar.to_csv(os.path.join(results_path, 'sca-%s.csv' % datenum))
+        logger.info("Simulation results (scalars and vectors) saved in %s." % results_path)
 
     def add_model(self, model):
         self.model = model

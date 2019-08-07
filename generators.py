@@ -1,7 +1,7 @@
-from results import Results
-from packets import Packet, PacketType
-from events import Event
-import gsim_utils as gu
+from gsim.results import Results
+from gsim.packets import Packet, PacketType
+from gsim.events import Event, EventType
+import gsim.gsim_utils as gu
 
 import numpy as np
 import logging
@@ -13,7 +13,7 @@ logger = logging.getLogger('generators')
 
 class Source:
     """
-    A source generates Packets
+    A generator for data Packets (normal or malicious)
     """
 
     def __init__(self, rate, outputs=None, distribution='Poisson', attack_prob=0, sim=None, model=None, name=None):
@@ -53,9 +53,9 @@ class Source:
         timestamp = self.sim.get_time() + np.random.poisson(self.rate, 1)[0]
 
         # Create packet
-        malicious = np.random.choice([True, False], 1, p=[self.attack_prob, 1 - self.attack_prob])[0],
+        malicious = np.random.choice([True, False], 1, p=[self.attack_prob, 1 - self.attack_prob])[0]
         packet = Packet(
-            type=PacketType.MALICIOUS if malicious else PacketType.NORMAL,
+            ptype=PacketType.MALICIOUS if malicious else PacketType.NORMAL,
             active=True,
             module_id=id(self),
             generation_time=timestamp
@@ -69,7 +69,7 @@ class Source:
         # packet generation event
         event_generation = Event(
             timestamp=timestamp,
-            etype='PACKET_GENERATION',
+            etype=EventType.PACKET_GENERATION,
             module_id=id(self),
             packet_id=id(packet)
         )
@@ -87,7 +87,7 @@ class Source:
         # packet arrival event (at the module connected as output to the source)
         event_arrival = Event(
             timestamp=timestamp,
-            etype='QUEUE_PACKET_ARRIVAL',
+            etype=EventType.QUEUE_PACKET_ARRIVAL,
             module_id=id(destination),
             packet_id=id(packet)
         )

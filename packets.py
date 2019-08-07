@@ -10,11 +10,11 @@ class PacketType(Enum):
 
 class Packet:
 
-    def __init__(self, model=None, sim=None, pkt_type=None, detected=None, active=True, module_id=None,
+    def __init__(self, model=None, sim=None, ptype=None, detected=None, active=True, module_id=None,
                  generation_time=None, pkts_to_remove=None):
         self.sim = sim
         self.model = model
-        self.type = pkt_type
+        self.ptype = ptype
         self.pkts_to_remove = pkts_to_remove  # num packets to remove from queue (if of type NEG_SIGNAL)
         self.detected = detected  # If an anomaly detector has marked it as malicious
         self.active = active  # inactive when reaches destination
@@ -22,29 +22,30 @@ class Packet:
         self.generation_time = generation_time
 
     def is_normal(self):
-        return self.type == PacketType.NORMAL
+        return self.ptype == PacketType.NORMAL
 
     def is_malicious(self):
-        return self.type == PacketType.MALICIOUS
+        return self.ptype == PacketType.MALICIOUS
 
     def is_neg_signal(self):
-        return self.type == PacketType.NEG_SIGNAL
+        return self.ptype == PacketType.NEG_SIGNAL
+
+    def is_permit(self):
+        return self.ptype == PacketType.PERMIT
 
     def set_module(self, module_id):
-        """ Change self.module_id when sent from one (old) module to another (new)
+        """ Change self.module_id when sent from one (old) module to another (new), and update Results.
 
         :return: /
         """
 
-        # Todo: Update results for NEG_SIGNAL and PERMIT type of Packets
-
         old_module_id = self.module_id
         old_module = self.model.get_module(old_module_id)
         if hasattr(old_module, 'results'):
-            old_module.results.add_packet_departure(id(self), self.sim.get_time(), self.is_malicious())
+            old_module.results.add_packet_departure(id(self), self.sim.get_time(), self.ptype)
         new_module = self.model.get_module(module_id)
         if hasattr(new_module, 'results'):
-            new_module.results.add_packet_arrival(id(self), self.sim.get_time(), self.is_malicious())
+            new_module.results.add_packet_arrival(id(self), self.sim.get_time(), self.ptype)
         self.module_id = module_id
 
     def register_with_model(self, model):
