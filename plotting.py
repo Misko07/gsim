@@ -99,5 +99,6 @@ def plot_module_utilisation(results_file, module_id=None, module_name=None):
 
 
 if __name__ == '__main__':
-    plot_module_utilisation(results_file='results/vec-190417-191612.csv', module_name='detector1')  # module_id='2530220349256')  #  module_name='q2'
+    plot_module_utilisation(results_file='results/vec-190904-162912.csv', module_name='q1')  # module_id='2530220349256')  #  module_name='q2'
 
+10

@@ -383,7 +383,7 @@ if __name__ == '__main__':
     ad = AnomalyDetector(name='detector1', service_rate=0.2, tp_rate=0.9, fp_rate=0.05)
     q_nor = Queue(name='dest_normal')
     q_att = Queue(name='dest_attack')
-    gen = Source(rate=5, attack_prob=0.3, name='gen')
+    gen = Source(rate=0.5, attack_prob=0.8, name='gen')
 
     # Add component's inputs and outputs
     gen.outputs = [{'module': q1, 'prob': 1}]

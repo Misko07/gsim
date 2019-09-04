@@ -1,6 +1,6 @@
+from gsim.modules import Server, Queue, AnomalyDetector
+from gsim.events import Event, EventType
 import numpy as np
-from modules import Server, Queue, AnomalyDetector
-from events import Event
 import logging
 
 
@@ -60,13 +60,14 @@ def choose_output(outputs):
 
 def create_event(destination, time_now, packet_id):
 
+    # Todo check if I'm not missing some cases
     etype = None
     if type(destination) == Server and not destination.busy:
-        etype = 'SERVER_PACKET_ARRIVAL'
+        etype = EventType.SERVER_PACKET_ARRIVAL
     elif type(destination) == Queue:
-        etype = 'QUEUE_PACKET_ARRIVAL'
+        etype = EventType.QUEUE_PACKET_ARRIVAL
     elif type(destination) == AnomalyDetector and not destination.busy:
-        etype = 'DETECTOR_PACKET_ARRIVAL'
+        etype = EventType.DETECTOR_PACKET_ARRIVAL
 
     event = Event(
         timestamp=time_now,
