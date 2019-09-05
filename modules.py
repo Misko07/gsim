@@ -81,4 +81,41 @@ class AnomalyDetector:
         self.sim = sim
 
 
+class PermitConnector:
+    """
+    A PermitConnector is a module that connects a stream of packets and a stream of permits. It matches a single packet
+    with a single permit, then forwards the packet, and discards the permit. The idea behind it is to allow modeling of
+    systems where the rate of packets will be limited (by the permit rate).
+
+    This module can store one packet or one permit. It forwards the packet to the module's outputs immediately after
+    a permit and a packet have been recorded.
+    """
+
+    def __init__(self, inputs_pkt=None, inputs_prm=None, outputs=None, model=None, sim=None, name=None):
+        self.inputs_pkt = inputs_pkt
+        self.inputs_prm = inputs_prm
+        self.outputs = outputs
+        self.model = model
+        self.sim = sim
+        self.name = name
+        self.results = Results()
+        self.packet = None  # current packet
+        self.permit = None  # current permit
+
+    def register_with_model(self, model):
+        self.model = model
+
+    def register_with_sim(self, sim):
+        self.sim = sim
+
+    def has_packet(self):
+        return self.packet is not None
+
+    def has_permit(self):
+        return self.permit is not None
+
+
+
 # Todo: Add a 'Module' class and all other modules will inherit of it
+
+

@@ -1,5 +1,6 @@
-from gsim.modules import Server, Queue, AnomalyDetector
+from gsim.modules import Server, Queue, AnomalyDetector, PermitConnector
 from gsim.events import Event, EventType
+from gsim.packets import PacketType
 import numpy as np
 import logging
 
@@ -8,12 +9,13 @@ logging.config.fileConfig("logging.conf")
 logger = logging.getLogger('utils')
 
 
-def choose_output(outputs):
+def choose_output(outputs, pkt_type=None):
     """
     Choose a destination module for a packet, out of a list of output modules - according to a probability distribution
     for each of them, and if they're not busy
 
     :param outputs:
+    :param pkt_type:
     :return:
     """
 
@@ -35,6 +37,14 @@ def choose_output(outputs):
     for module, prob in zip(output_modules, output_probs):
         if hasattr(module, 'busy') and module.busy == True:
             continue
+
+        # Special conditions if next module is Permit Connector
+        if not(type(module) == PermitConnector and pkt_type == PacketType.PERMIT and not module.has_permit()):
+            continue
+        if not(type(module) == PermitConnector and (pkt_type == PacketType.NORMAL or pkt_type == PacketType.MALICIOUS)
+               and not module.has_packet()):
+            continue
+
         outputs_subset.append(module)
         probs_subset.append(prob)
 
@@ -58,9 +68,9 @@ def choose_output(outputs):
     return outputs_subset[index]
 
 
-def create_event(destination, time_now, packet_id):
+def create_event(destination, time_now, packet_id, pkt_type=None):
 
-    # Todo check if I'm not missing some cases
+    # Todo check if I'm not missing something
     etype = None
     if type(destination) == Server and not destination.busy:
         etype = EventType.SERVER_PACKET_ARRIVAL
@@ -68,15 +78,24 @@ def create_event(destination, time_now, packet_id):
         etype = EventType.QUEUE_PACKET_ARRIVAL
     elif type(destination) == AnomalyDetector and not destination.busy:
         etype = EventType.DETECTOR_PACKET_ARRIVAL
+    elif type(destination) == PermitConnector and pkt_type == PacketType.PERMIT and not destination.has_permit():
+        etype = EventType.CONNECTOR_PERMIT_ARRIVAL
+    elif type(destination) == PermitConnector and (pkt_type == PacketType.NORMAL or pkt_type == PacketType.MALICIOUS) \
+            and not destination.has_packet():
+        etype = EventType.CONNECTOR_PACKET_ARRIVAL
 
-    event = Event(
-        timestamp=time_now,
-        etype=etype,
-        module_id=id(destination),
-        packet_id=packet_id
-    )
-
-    logger.debug("%8.3f -- Created event %s for node_id: %s, packet_id: %s" %
-                 (time_now, event.etype, destination.name, str(packet_id)))
+    if etype:
+        event = Event(
+            timestamp=time_now,
+            etype=etype,
+            module_id=id(destination),
+            packet_id=packet_id
+        )
+        logger.debug("%8.3f -- Created event %s for node_id: %s, packet_id: %s" %
+                     (time_now, event.etype, destination.name, str(packet_id)))
+    else:
+        event = None
+        logger.warning("%8.3f -- Event not created for destination: %s, packet_id: %s" %
+                       (time_now, destination.name, str(packet_id)))
 
     return event

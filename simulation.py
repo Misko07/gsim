@@ -4,10 +4,10 @@ A `simulation` object runs the engine of the simulator, looping through events.
 A `model` object is needed to keep track of all modules and packets in the simulation.
 """
 
-from gsim.modules import Queue, Server, AnomalyDetector
+from gsim.modules import Queue, Server, AnomalyDetector, PermitConnector
 from gsim.events import Event, EventType
 from gsim.packets import PacketType
-from gsim.generators import Source
+from gsim.generators import Source, PermitSource
 from gsim.configs import ROOT_DIR
 import gsim.gsim_utils as gu
 
@@ -51,7 +51,7 @@ class Simulation:
             module_.busy = False
 
             # Send to one of the module's outputs - at least one of the outputs must be a Queue!!
-            destination = gu.choose_output(module_.outputs)
+            destination = gu.choose_output(module_.outputs, packet.ptype)
             if destination is None:
                 # This should never happen
                 logger.error("%8.3f -- node %s, packet id: %s - Destination not found!" %
@@ -60,7 +60,7 @@ class Simulation:
                                 module_.name)
 
             # Put new event in priority queue
-            event = gu.create_event(destination, self.get_time(), packet_id)
+            event = gu.create_event(destination, self.get_time(), packet_id, packet.ptype)
             self.add_event(event)
 
             # Get a new packet from inputs
@@ -73,7 +73,7 @@ class Simulation:
 
             if type(input_module) == Queue and len(input_module) > 0:
                 new_packet = input_module.pop()
-                event = gu.create_event(module_, self.get_time(), id(new_packet))
+                event = gu.create_event(module_, self.get_time(), id(new_packet), packet.ptype)
                 self.add_event(event)
 
         elif event.etype == EventType.DETECTOR_SERVICE_COMPLETE:
@@ -84,7 +84,9 @@ class Simulation:
             elif packet.is_normal():
                 detect_prob = module_.fp_rate
             else:
-                raise ValueError("Invalid packet type!")
+                detect_prob = 0
+                logger.warning("Invalid packet type received in Anomaly detector. Treated as normal.")
+                # raise ValueError("Invalid packet type!")
 
             decision_attack = np.random.choice([True, False], 1, p=[detect_prob, 1-detect_prob])[0]
             packet.detected = decision_attack
@@ -96,9 +98,9 @@ class Simulation:
             module_.busy = False
 
             if decision_attack:
-                destination = gu.choose_output(module_.outputs_detected)
+                destination = gu.choose_output(module_.outputs_detected, packet.ptype)
             else:
-                destination = gu.choose_output(module_.outputs)
+                destination = gu.choose_output(module_.outputs, packet.ptype)
             if destination is None:
                 # This should never happen
                 logger.error("%8.3f -- node %s, packet id: %s - Destination not found!" %
@@ -106,23 +108,22 @@ class Simulation:
                 raise TypeError("Destination not found in outputs of node %s. Make sure there's a Queue as output." %
                                 module_.name)
 
-            event = gu.create_event(destination, self.get_time(), packet_id)
+            event = gu.create_event(destination, self.get_time(), packet_id, packet.ptype)
             self.add_event(event)
 
             # Get a new packet from inputs (if queue)
             input_module = module_.inputs[0]['module']
             # todo: Implement multiple inputs to a server
-
             if type(input_module) == Queue:
                 logger.debug("%8.3f -- AnomalyDetector %s asks input %s (len: %d) for more packets" %
                              (self.get_time(), module_.name, input_module.name, len(input_module)))
 
-            if type(input_module) == Queue and len(input_module) > 0:
-                new_packet = input_module.pop()
-                event = gu.create_event(module_, self.get_time(), id(new_packet))
-                self.add_event(event)
+                if len(input_module) > 0:
+                    new_packet = input_module.pop()
+                    event = gu.create_event(module_, self.get_time(), id(new_packet), packet.ptype)
+                    self.add_event(event)
 
-        elif event.etype == EventType.PACKET_GENERATION:
+        elif event.etype == EventType.PACKET_GENERATION or event.etype == EventType.PERMIT_GENERATION:
             # generate a new packet
             logger.info("%8.3f -- %s at node %s, packet id: %s" %
                         (self.get_time(), event.etype, module_.name, str(packet_id)))
@@ -142,10 +143,10 @@ class Simulation:
 
                 # if packet is first in the queue, inform the output module of this
                 if len(module_) == 1:
-                    destination = gu.choose_output(module_.outputs)
+                    destination = gu.choose_output(module_.outputs, packet.ptype)
                     if destination:
                         # Forward packet to destination if not busy, otherwise do nothing
-                        event = gu.create_event(destination, self.get_time(), packet_id)
+                        event = gu.create_event(destination, self.get_time(), packet_id, packet.ptype)
                         self.add_event(event)
                         module_.pop()
 
@@ -179,7 +180,7 @@ class Simulation:
 
         elif event.etype == EventType.SERVER_PACKET_ARRIVAL or event.etype == EventType.DETECTOR_PACKET_ARRIVAL:
             # A packet has arrived in a server or anomaly detector
-            # Todo: What if neg-signal or permit packet arrive here?
+            # Todo: What if neg-signal or permit packet arrive here?  -- they should just be treated as normal packets
             packet.set_module(module_id)
             if not module_.busy:
                 module_.busy = True
@@ -203,6 +204,89 @@ class Simulation:
                 packet_id=packet_id
             )
             self.add_event(event)
+
+        elif event.etype == EventType.CONNECTOR_PERMIT_ARRIVAL:
+            # A permit has arrived at a PermitConnector
+            packet.set_module(module_id)
+
+            if module_.has_packet():
+                # Forward packet to output
+                destination = gu.choose_output(module_.outputs, packet.ptype)
+                packet_id = id(module_.packet)
+                event = gu.create_event(destination, self.get_time(), packet_id, packet.ptype)
+                self.add_event(event)
+                module_.packet = None
+                module_.permit = None
+
+                # Get a new packet from packets input (if queue)
+                input_pkt_module = module_.inputs_pkt[0]['module']
+                if type(input_pkt_module) == Queue:
+                    logger.debug("%8.3f -- PermitConnector %s asks packet input %s (len: %d) for more packets" %
+                                 (self.get_time(), module_.name, input_pkt_module.name, len(input_pkt_module)))
+
+                    if len(input_pkt_module) > 0:
+                        new_packet = input_pkt_module.pop()
+                        event = gu.create_event(module_, self.get_time(), id(new_packet), packet.ptype)
+                        self.add_event(event)
+                else:
+                    raise ValueError("Invalid network architecture!")
+
+                # Get a new permit from permits input (if queue)
+                input_prm_module = module_.inputs_prm[0]['module']
+                if type(input_prm_module) == Queue:
+                    logger.debug("%8.3f -- PermitConnector %s asks permit input %s (len: %d) for more permits" %
+                                 (self.get_time(), module_.name, input_prm_module.name, len(input_prm_module)))
+
+                    if len(input_prm_module) > 0:
+                        new_packet = input_prm_module.pop()
+                        event = gu.create_event(module_, self.get_time(), id(new_packet), packet.ptype)
+                        self.add_event(event)
+                else:
+                    raise ValueError("Invalid network architecture!")
+
+            else:
+                module_.permit = packet
+
+        elif event.etype == EventType.CONNECTOR_PACKET_ARRIVAL:
+            # A data packet has arrived at a PermitConnector
+            packet.set_module(module_id)
+
+            if module_.has_permit():
+                # Forward packet to output
+                destination = gu.choose_output(module_.outputs, packet.ptype)
+                event = gu.create_event(destination, self.get_time(), packet_id, packet.ptype)
+                self.add_event(event)
+                module_.packet = None
+                module_.permit = None
+
+                # Get a new packet from packets input (if queue)
+                input_pkt_module = module_.inputs_pkt[0]['module']
+                if type(input_pkt_module) == Queue:
+                    logger.debug("%8.3f -- PermitConnector %s asks packet input %s (len: %d) for more packets" %
+                                 (self.get_time(), module_.name, input_pkt_module.name, len(input_pkt_module)))
+
+                    if len(input_pkt_module) > 0:
+                        new_packet = input_pkt_module.pop()
+                        event = gu.create_event(module_, self.get_time(), id(new_packet), packet.ptype)
+                        self.add_event(event)
+                else:
+                    raise ValueError("Invalid network architecture!")
+
+                # Get a new permit from permits input (if queue)
+                input_prm_module = module_.inputs_prm[0]['module']
+                if type(input_prm_module) == Queue:
+                    logger.debug("%8.3f -- PermitConnector %s asks permit input %s (len: %d) for more permits" %
+                                 (self.get_time(), module_.name, input_prm_module.name, len(input_prm_module)))
+
+                    if len(input_prm_module) > 0:
+                        new_packet = input_prm_module.pop()
+                        event = gu.create_event(module_, self.get_time(), id(new_packet), packet.ptype)
+                        self.add_event(event)
+                else:
+                    raise ValueError("Invalid network architecture!")
+
+            else:
+                module_.packet = packet
 
     def get_summary(self):
 
@@ -335,7 +419,7 @@ class Simulation:
             # Process event
             self.process_event(event)
 
-        # End of simulation
+        # End of simulationerror
         self.get_summary()
 
 
@@ -352,7 +436,7 @@ class Model:
         module.register_with_model(self)
         self.modules[id(module)] = module
 
-        if type(module) == Source:
+        if type(module) == Source or type(module) == PermitSource:
             self.sources[id(module)] = module
 
     def get_module(self, module_id):
@@ -374,21 +458,30 @@ class Model:
 if __name__ == '__main__':
 
     sim = Simulation(duration=2000)
-    m = Model(name='model1')
 
     # Declare model's components
     q1 = Queue(name='q1')
+    qp = Queue(name='qp')
+    qs = Queue(name='qs')
     s1 = Server(name='s1', service_rate=0.2)
     q2 = Queue(name='q2')
     ad = AnomalyDetector(name='detector1', service_rate=0.2, tp_rate=0.9, fp_rate=0.05)
     q_nor = Queue(name='dest_normal')
     q_att = Queue(name='dest_attack')
-    gen = Source(rate=0.5, attack_prob=0.8, name='gen')
+    conn = PermitConnector(name='connector')
+    gen = Source(rate=0.5, attack_prob=0.2, name='gen')
+    gen_permit = PermitSource(rate=0.3, name='permit_gen')
 
     # Add component's inputs and outputs
     gen.outputs = [{'module': q1, 'prob': 1}]
-    q1.outputs = [{'module': s1, 'prob': 1}]
-    s1.inputs = [{'module': q1, 'prob': 1}]
+    gen_permit.outputs = [{'module': qp, 'prob': 1}]
+    q1.outputs = [{'module': conn, 'prob': 1}]
+    qp.outputs = [{'module': conn, 'prob': 1}]
+    conn.inputs_pkt = [{'module': q1, 'prob': 1}]
+    conn.inputs_prm = [{'module': qp, 'prob': 1}]
+    conn.outputs = [{'module': qs, 'prob': 1}]
+    qs.outputs = [{'module': s1, 'prob': 1}]
+    s1.inputs = [{'module': qs, 'prob': 1}]
     s1.outputs = [{'module': q2, 'prob': 1}]
     q2.outputs = [{'module': ad, 'prob': 1}]
     ad.inputs = [{'module': q2, 'prob': 1}]
@@ -398,7 +491,11 @@ if __name__ == '__main__':
     # Register components to model
     m = Model()
     m.add_module(gen)
+    m.add_module(gen_permit)
     m.add_module(q1)
+    m.add_module(qp)
+    m.add_module(qs)
+    m.add_module(conn)
     m.add_module(s1)
     m.add_module(q2)
     m.add_module(ad)

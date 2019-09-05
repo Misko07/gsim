@@ -74,7 +74,7 @@ class Source:
         )
 
         # Choose a destination module for the packet
-        destination = gu.choose_output(self.outputs)
+        destination = gu.choose_output(self.outputs, packet.ptype)
 
         if destination is None:
             # This should never happen
@@ -150,13 +150,13 @@ class PermitSource:
         # packet generation event
         event_generation = Event(
             timestamp=timestamp,
-            etype=EventType.PACKET_GENERATION,
+            etype=EventType.PERMIT_GENERATION,
             module_id=id(self),
             packet_id=id(packet)
         )
 
         # Choose a destination module for the packet
-        destination = gu.choose_output(self.outputs)
+        destination = gu.choose_output(self.outputs, packet.ptype)
 
         if destination is None:
             # This should never happen

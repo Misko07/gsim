@@ -59,7 +59,7 @@ class Results:
 
         if pkt_type == PacketType.MALICIOUS:
             self.num_malicious_arrived += 1
-        else:
+        elif pkt_type == PacketType.NORMAL:
             self.num_normal_arrived += 1
 
         assert(self.num_pkts_arrived == self.num_malicious_arrived + self.num_normal_arrived)
@@ -81,6 +81,7 @@ class Results:
                 'arrival': None,
                 'departure': time,
                 'removal': None,
+                'normal': pkt_type == PacketType.NORMAL,
                 'malicious': pkt_type == PacketType.MALICIOUS,
                 'negative': pkt_type == PacketType.NEG_SIGNAL,
                 'permit': pkt_type == PacketType.PERMIT
@@ -95,7 +96,7 @@ class Results:
 
         if pkt_type == PacketType.MALICIOUS:
             self.num_malicious_left += 1
-        else:
+        elif pkt_type == PacketType.NORMAL:
             self.num_normal_left += 1
 
         assert(self.num_pkts_left == self.num_malicious_left + self.num_normal_left)
