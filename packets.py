@@ -33,7 +33,7 @@ class Packet:
     def is_permit(self):
         return self.ptype == PacketType.PERMIT
 
-    def set_module(self, module_id):
+    def set_module(self, new_module_id):
         """ Change self.module_id when sent from one (old) module to another (new), and update Results.
 
         :return: /
@@ -41,15 +41,32 @@ class Packet:
 
         old_module_id = self.module_id
         old_module = self.model.get_module(old_module_id)
+        new_module = self.model.get_module(new_module_id)
+        self.module_id = new_module_id
+
         if hasattr(old_module, 'results'):
             old_module.results.add_packet_departure(id(self), self.sim.get_time(), self.ptype)
-        new_module = self.model.get_module(module_id)
         if hasattr(new_module, 'results'):
             new_module.results.add_packet_arrival(id(self), self.sim.get_time(), self.ptype)
-        self.module_id = module_id
 
     def register_with_model(self, model):
         self.model = model
 
     def register_with_sim(self, sim):
         self.sim = sim
+
+    def remove_data_packet(self, module_):
+        """ Removes data packet(s) from a queue module.
+        Todo: Maybe it's better to move this to a module class
+
+        :param module_: str - id of the module where packets need to be removed from
+        """
+
+        num_removed = 0
+        for i in range(self.pkts_to_remove):
+            if len(module_) > 0:
+                removed_pkt = module_.popleft()
+                module_.results.add_packet_removal(id(removed_pkt), self.sim.get_time(), removed_pkt.ptype)
+                num_removed += 1
+
+        return num_removed

@@ -39,11 +39,11 @@ def choose_output(outputs, pkt_type=None):
             continue
 
         # Special conditions if next module is Permit Connector
-        if not(type(module) == PermitConnector and pkt_type == PacketType.PERMIT and not module.has_permit()):
-            continue
-        if not(type(module) == PermitConnector and (pkt_type == PacketType.NORMAL or pkt_type == PacketType.MALICIOUS)
-               and not module.has_packet()):
-            continue
+        if type(module) == PermitConnector:
+            if pkt_type == PacketType.PERMIT and module.has_permit():
+                continue
+            if pkt_type in [PacketType.NORMAL, PacketType.MALICIOUS] and module.has_packet():
+                continue
 
         outputs_subset.append(module)
         probs_subset.append(prob)
@@ -64,15 +64,20 @@ def choose_output(outputs, pkt_type=None):
 
     assert(np.sum(probs_subset_adjusted) == 1)
 
+    # Pick one output and return in
     index = np.random.choice(len(outputs_subset), probs_subset_adjusted)[0]
     return outputs_subset[index]
 
 
-def create_event(destination, time_now, packet_id, pkt_type=None):
+def create_arrival_event(destination, time_now, packet_id, pkt_type=None):
 
     # Todo check if I'm not missing something
     etype = None
-    if type(destination) == Server and not destination.busy:
+    if "NegativeSource" in str(type(destination)):  # Todo: remove this workaround
+        etype = EventType.NEG_PACKET_GENERATION
+    elif type(destination) == Queue and pkt_type == PacketType.NEG_SIGNAL:
+        etype = EventType.QUEUE_NEG_PACKET_ARRIVAL
+    elif type(destination) == Server and not destination.busy:
         etype = EventType.SERVER_PACKET_ARRIVAL
     elif type(destination) == Queue:
         etype = EventType.QUEUE_PACKET_ARRIVAL
@@ -95,7 +100,7 @@ def create_event(destination, time_now, packet_id, pkt_type=None):
                      (time_now, event.etype, destination.name, str(packet_id)))
     else:
         event = None
-        logger.warning("%8.3f -- Event not created for destination: %s, packet_id: %s" %
-                       (time_now, destination.name, str(packet_id)))
+        logger.error("%8.3f -- Event not created for destination: %s, packet_id: %s" %
+                     (time_now, destination.name, str(packet_id)))
 
     return event

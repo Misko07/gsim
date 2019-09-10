@@ -102,7 +102,7 @@ class Results:
         assert(self.num_pkts_left == self.num_malicious_left + self.num_normal_left)
 
     def add_packet_removal(self, pkt_id, time, pkt_type):
-        """ Record a packet removal by an arrival of a negative signal to the module.
+        """ Record a packet removal by an arrival of a negative signal to the module (queue).
 
         :param pkt_id: int, the id of removed packet
         :param time: int, time of removal
