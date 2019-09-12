@@ -49,7 +49,8 @@ class Source:
         # Todo: some of the events stuff below might need to be moved to simulation.process_event
 
         # Timestamp of next packet generation
-        timestamp = self.sim.get_time() + np.random.poisson(1/self.rate, 1)[0]
+        noise = (np.random.rand() - 0.5)/20  # added noise
+        timestamp = self.sim.get_time() + np.random.poisson(1/self.rate, 1)[0] + noise
 
         # Create packet
         malicious = np.random.choice([True, False], 1, p=[self.attack_prob, 1 - self.attack_prob])[0]
@@ -132,7 +133,8 @@ class PermitSource:
         # Todo: some of the events stuff below might need to be moved to simulation.process_event
 
         # Timestamp of next packet generation
-        timestamp = self.sim.get_time() + np.random.poisson(1/self.rate, 1)[0]
+        noise = (np.random.rand() - 0.5) / 20  # added noise
+        timestamp = self.sim.get_time() + np.random.poisson(1/self.rate, 1)[0] + noise
 
         # Create packet
         packet = Packet(
