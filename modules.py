@@ -1,5 +1,4 @@
-from results import Results
-
+from gsim.results import Results
 from collections import deque
 
 

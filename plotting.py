@@ -4,11 +4,12 @@ Plot results of the simulation
 """
 
 import pandas as pd
+import numpy as np
 from plotly.offline import plot
 import plotly.graph_objs as go
 
 
-def cumulative_arrivals(events_df):
+def _cumulative_arrivals(events_df):
     # sum up total packets in the module
     data_util = {'time': [], 'sum_pkts': []}
     sum_ = 0
@@ -99,11 +100,11 @@ def get_data_utilisation(results_file, module_id=None, module_name=None):
     events_all = pd.concat([events_mal, events_normal, events_permit, events_negsig])
     events_all.sort_values(by='time', inplace=True)
 
-    events_normal = cumulative_arrivals(events_normal)
-    events_mal = cumulative_arrivals(events_mal)
-    events_permit = cumulative_arrivals(events_permit)
-    events_negsig = cumulative_arrivals(events_negsig)
-    events_all = cumulative_arrivals(events_all)
+    events_normal = _cumulative_arrivals(events_normal)
+    events_mal = _cumulative_arrivals(events_mal)
+    events_permit = _cumulative_arrivals(events_permit)
+    events_negsig = _cumulative_arrivals(events_negsig)
+    events_all = _cumulative_arrivals(events_all)
 
     # events_fin.to_csv('results/vec_%s.csv' % module_name)
 
@@ -138,8 +139,31 @@ def plot_module_utilisation(results_file, module_id=None, module_name=None):
     plot(figure)
 
 
+def get_waittimes(results_file, data_modules=('qu', 'qs1', 's1', 'qs2', 's2', 'conn')):
+    df = pd.read_csv(results_file, index_col=0)
+    df = df.astype({'module_id': str, 'packet_id': str})
+
+    modules_unq = df.module_name.unique()
+    res = dict()
+    waittime_sum = 0
+
+    for module in modules_unq:
+        dfmod = df[(df.module_name == module) & (df.neg_signal == False) & (df.permit == False)]
+        dfmod = dfmod.dropna(subset=['arrival_time', 'departure_time'])
+        waittimes = dfmod['departure_time'] - dfmod['arrival_time']
+        res[module] = {"avg": np.mean(waittimes), "type": dfmod['module_class'], "waittimes": waittimes}
+        if module in data_modules:
+            waittime_sum += np.mean(waittimes)
+
+    res['avg_waittime'] = waittime_sum
+    return res
+
+
+
 # Todo: plot all results given a simulation name and store figures in a single place
 
 
 if __name__ == '__main__':
-    plot_module_utilisation(results_file='results/vec-190912-113454.csv', module_name='qp')  # module_id='2530220349256')  #  module_name='q2'
+    plot_graph1()
+    # get_waittimes(results_file='results/vec-190915-184128.csv')
+    # plot_module_utilisation(results_file='results/vec-190915-153434.csv', module_name='qp')  # module_id='2530220349256')  #  module_name='q2'

@@ -1,11 +1,12 @@
 from gsim.modules import Server, Queue, AnomalyDetector, PermitConnector
 from gsim.events import Event, EventType
 from gsim.packets import PacketType
+from gsim.configs import ROOT_DIR
 import numpy as np
 import logging
 
 
-logging.config.fileConfig("logging.conf")
+logging.config.fileConfig(ROOT_DIR + "/logging.conf")
 logger = logging.getLogger('utils')
 
 
@@ -64,8 +65,8 @@ def choose_output(outputs, pkt_type=None):
 
     assert(np.sum(probs_subset_adjusted) == 1)
 
-    # Pick one output and return in
-    index = np.random.choice(len(outputs_subset), probs_subset_adjusted)[0]
+    # Pick one output and return it
+    index = np.random.choice(len(outputs_subset), p=probs_subset_adjusted)
     return outputs_subset[index]
 
 

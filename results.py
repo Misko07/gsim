@@ -1,10 +1,11 @@
 from gsim.packets import PacketType
+from gsim.configs import ROOT_DIR
 
 import logging.config
 import numpy as np
 import logging
 
-logging.config.fileConfig("logging.conf")
+logging.config.fileConfig(ROOT_DIR + "/logging.conf")
 logger = logging.getLogger('results')
 
 

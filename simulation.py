@@ -19,14 +19,15 @@ import numpy as np
 import logging
 import os
 
-logging.config.fileConfig('logging.conf')
+logging.config.fileConfig(ROOT_DIR + "/logging.conf")
 logger = logging.getLogger('simulation')
 
 
 class Simulation:
 
-    def __init__(self, duration, model=None):
+    def __init__(self, duration, name='default', model=None):
         self.duration = duration
+        self.name = name
         self.model = model
         self.pq = PriorityQueue()
         self.time = 0
@@ -40,8 +41,8 @@ class Simulation:
         packet = self.model.get_packet(packet_id)
 
         if module_ is None:
-            raise ValueError("Module with id %s not found! Check if all modules are registered with model using "
-                             "`model.add_module()`." % module_id)
+            raise ValueError("Module with id %s not found in model! Check if all modules are registered with model "
+                             "using `model.add_module()`." % module_id)
 
         if event.etype == EventType.SERVICE_COMPLETE:
 
@@ -212,8 +213,21 @@ class Simulation:
 
         elif event.etype == EventType.NEG_PACKET_GENERATION:
             # A negative signal needs to be generated at a NegativeSource
-            packet.set_module(module_id)  # Set current (data) packet to module NegSource - this is its final dest.
+            packet.set_module(module_id)  # Set current (data) packet to module NegSource
             module_.generate_signal()
+            # TODO: implement forwarding data packets to outputs, and signals to outputs_signal
+
+            # Forward the data packet to the module's outputs
+            destination = gu.choose_output(module_.outputs, packet.ptype)
+            if destination is None:
+                logger.error("%8.3f -- node %s, packet id: %s - Destination not found!" %
+                             (self.get_time(), module_.name, str(packet_id)))
+                raise TypeError("Destination not found in outputs of node %s. Make sure there's a Queue as output." %
+                                module_.name)
+
+            # Put new event in priority queue
+            event = gu.create_arrival_event(destination, self.get_time(), packet_id, packet.ptype)
+            self.add_event(event)
 
         elif event.etype == EventType.CONNECTOR_PERMIT_ARRIVAL:
             # A permit has arrived at a PermitConnector
@@ -392,13 +406,15 @@ class Simulation:
         df_scalar = pd.DataFrame(scalar_res, columns=list(scalar_res.keys()))
 
         # Save results to csv
-        results_path = os.path.join(ROOT_DIR, 'results')
-        if not os.path.isdir(results_path):
-            os.mkdir(results_path)
-        datenum = datetime.now().strftime("%y%m%d-%H%M%S")
-        df_vector.to_csv(os.path.join(results_path, 'vec-%s.csv' % datenum))
-        df_scalar.to_csv(os.path.join(results_path, 'sca-%s.csv' % datenum))
-        logger.info("Simulation results (scalars and vectors) saved in %s." % results_path)
+        # results_path = os.path.join(ROOT_DIR, 'results')
+        if not os.path.isdir('results'):
+            os.mkdir('results')
+        datenum = ""
+        if self.name == 'default':
+            datenum = "-" + datetime.now().strftime("%y%m%d-%H%M%S")
+        df_vector.to_csv('results/vec-%s%s.csv' % (self.name, datenum))
+        df_scalar.to_csv('results/sca-%s%s.csv' % (self.name, datenum))
+        logger.info("Simulation results (scalars and vectors) saved in %s." % (os.getcwd() + '/results'))
 
     def add_model(self, model):
         self.model = model
@@ -479,53 +495,63 @@ class Model:
 
 if __name__ == '__main__':
 
-    sim = Simulation(duration=2000)
+    DETECTOR_TP = 0.9
+    DETECTOR_FP = 0.05
+    DETECTOR_SERVICE_RATE = 0.4
+    PERMIT_RATE = 1
+    PACKET_RATE = 0.3
+    ATTACK_PROB = 0.05
+    ATTACK_RETURN_PROB = 0.5
+
+    sim = Simulation(duration=10000, name="sim-test")
 
     # Declare model's components
-    q1 = Queue(name='q1')
+    qu = Queue(name='qu')
     qp = Queue(name='qp')
-    qs = Queue(name='qs')
-    s1 = Server(name='s1', service_rate=0.3)
-    q2 = Queue(name='q2')
-    ad = AnomalyDetector(name='detector1', service_rate=0.2, tp_rate=0.9, fp_rate=0.05)
-    q_nor = Queue(name='dest_normal')
-    q_att = Queue(name='dest_attack')
+    qs1 = Queue(name='qs1')
+    s1 = AnomalyDetector(name='s1', service_rate=DETECTOR_SERVICE_RATE, tp_rate=DETECTOR_TP, fp_rate=DETECTOR_FP)
+    qs2 = Queue(name='qs2')
+    s2 = AnomalyDetector(name='s2', service_rate=DETECTOR_SERVICE_RATE, tp_rate=DETECTOR_TP, fp_rate=DETECTOR_FP)
     conn = PermitConnector(name='connector')
-    gen = Source(rate=0.3, attack_prob=0.2, name='gen')
-    gen_permit = PermitSource(rate=0.3, name='permit_gen')
+    r = Source(rate=PACKET_RATE, attack_prob=ATTACK_PROB, name='r')  # packet generator
+    t = PermitSource(rate=PERMIT_RATE, name='t')  # permit generator
     gen_neg = NegativeSource(name='gen_neg')
+    q_nor = Queue(name='dest_normal')
+    q_att = Queue(name='dest_att')
 
     # Add component's inputs and outputs
-    gen.outputs = [{'module': q1, 'prob': 1}]
-    gen_permit.outputs = [{'module': qp, 'prob': 1}]
-    q1.outputs = [{'module': conn, 'prob': 1}]
+    r.outputs = [{'module': qu, 'prob': 1}]
+    t.outputs = [{'module': qp, 'prob': 1}]
+    qu.outputs = [{'module': conn, 'prob': 1}]
     qp.outputs = [{'module': conn, 'prob': 1}]
-    conn.inputs_pkt = [{'module': q1, 'prob': 1}]
+    conn.inputs_pkt = [{'module': qu, 'prob': 1}]
     conn.inputs_prm = [{'module': qp, 'prob': 1}]
-    conn.outputs = [{'module': qs, 'prob': 1}]
-    qs.outputs = [{'module': s1, 'prob': 1}]
-    s1.inputs = [{'module': qs, 'prob': 1}]
-    s1.outputs = [{'module': q2, 'prob': 1}]
-    q2.outputs = [{'module': ad, 'prob': 1}]
-    ad.inputs = [{'module': q2, 'prob': 1}]
-    ad.outputs = [{'module': q_nor, 'prob': 1}]
-    ad.outputs_detected = [{'module': gen_neg, 'prob': 1}]
-    gen_neg.outputs = [{'module': qp, 'prob': 1}]
+    conn.outputs = [{'module': qs1, 'prob': 1}]
+    qs1.outputs = [{'module': s1, 'prob': 1}]
+    s1.inputs = [{'module': qs1, 'prob': 1}]
+    s1.outputs = [{'module': qs2, 'prob': 1}]
+    s1.outputs_detected = [{'module': gen_neg, 'prob': 1}]
+    qs2.outputs = [{'module': s2, 'prob': 1}]
+    s2.inputs = [{'module': qs2, 'prob': 1}]
+    s2.outputs = [{'module': q_nor, 'prob': 1}]
+    s2.outputs_detected = [{'module': gen_neg, 'prob': 1}]
+    gen_neg.outputs_signal = [{'module': qp, 'prob': 1}]
+    gen_neg.outputs = [{'module': qu, 'prob': ATTACK_RETURN_PROB}, {'module': q_att, 'prob': 1-ATTACK_RETURN_PROB}]
 
     # Register components to model
     m = Model()
-    m.add_module(gen)
-    m.add_module(gen_permit)
-    m.add_module(q1)
+    m.add_module(r)
+    m.add_module(t)
+    m.add_module(qu)
     m.add_module(qp)
-    m.add_module(qs)
     m.add_module(conn)
+    m.add_module(qs1)
+    m.add_module(qs2)
     m.add_module(s1)
-    m.add_module(q2)
-    m.add_module(ad)
+    m.add_module(s2)
     m.add_module(q_nor)
-    m.add_module(q_att)
     m.add_module(gen_neg)
+    m.add_module(q_att)
 
     # Register model with simulation.
     # This also registers all model's modules with simulation.

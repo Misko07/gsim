@@ -2,12 +2,13 @@ from gsim.results import Results
 from gsim.packets import Packet, PacketType
 from gsim.events import Event, EventType
 from gsim.gsim_utils import choose_output, create_arrival_event
+from gsim.configs import ROOT_DIR
 
 import numpy as np
 import logging
 
 
-logging.config.fileConfig("logging.conf")
+logging.config.fileConfig(ROOT_DIR + "/logging.conf")
 logger = logging.getLogger('generators')
 
 
@@ -186,7 +187,7 @@ class NegativeSource:
     to generate a single Negative Signal.
     """
 
-    def __init__(self, outputs=None, sim=None, model=None, name=None):
+    def __init__(self, outputs=None, outputs_signal=None, sim=None, model=None, name=None):
         """
         Constructor
 
@@ -195,7 +196,8 @@ class NegativeSource:
         :param distribution: A string. Currently only 'Poisson' is supported
         """
 
-        self.outputs = outputs
+        self.outputs = outputs  # Outputs for forwarding data packets
+        self.outputs_signal = outputs_signal  # Outputs for negative signals
         self.sim = sim
         self.model = model
         self.name = name
@@ -228,6 +230,9 @@ class NegativeSource:
         self.model.add_packet(packet)
 
         # Create packet arrival event (at the module connected as output to the source)
-        destination = choose_output(self.outputs, packet.ptype)
+        destination = choose_output(self.outputs_signal, packet.ptype)
         event = create_arrival_event(destination, self.sim.get_time(), id(packet), pkt_type=packet.ptype)
         self.sim.add_event(event)
+
+        # TODO: implement forwarding data packets to outputs, and signals to outputs_signal
+
