@@ -32,7 +32,7 @@ class Results:
         self.num_permits_removed = 0
         self.packets = {}
 
-    def add_packet_arrival(self, pkt_id, time, pkt_type):
+    def _add_packet_arrival(self, pkt_id, time, pkt_type):
         """ Update packet list and counters when a packet arrived at module
 
         :param pkt_id: str
@@ -65,7 +65,7 @@ class Results:
 
         assert(self.num_pkts_arrived == self.num_malicious_arrived + self.num_normal_arrived)
 
-    def add_packet_departure(self, pkt_id, time, pkt_type):
+    def _add_packet_departure(self, pkt_id, time, pkt_type):
         """ Update packet list and counters when a packet left a module
 
         :param pkt_id: str
@@ -102,7 +102,7 @@ class Results:
 
         assert(self.num_pkts_left == self.num_malicious_left + self.num_normal_left)
 
-    def add_packet_removal(self, pkt_id, time, pkt_type):
+    def _add_packet_removal(self, pkt_id, time, pkt_type):
         """ Record a packet removal by an arrival of a negative signal to the module (queue).
 
         :param pkt_id: int, the id of removed packet

@@ -35,10 +35,10 @@ class Source:
         self.name = name
         self.results = Results()
 
-    def register_with_model(self, model):
+    def _register_with_model(self, model):
         self.model = model
 
-    def register_with_sim(self, sim):
+    def _register_with_sim(self, sim):
         self.sim = sim
 
     def generate_packet(self):
@@ -51,7 +51,7 @@ class Source:
 
         # Timestamp of next packet generation
         noise = (np.random.rand() - 0.5)/20  # added noise
-        timestamp = self.sim.get_time() + np.random.poisson(1/self.rate, 1)[0] + noise
+        timestamp = self.sim._get_time() + np.random.poisson(1 / self.rate, 1)[0] + noise
 
         # Create packet
         malicious = np.random.choice([True, False], 1, p=[self.attack_prob, 1 - self.attack_prob])[0]
@@ -63,9 +63,9 @@ class Source:
         )
 
         # Register packet with model and simulation
-        packet.register_with_sim(self.sim)
-        packet.register_with_model(self.model)
-        self.model.add_packet(packet)
+        packet._register_with_sim(self.sim)
+        packet._register_with_model(self.model)
+        self.model._add_packet(packet)
 
         # packet generation event
         event_generation = Event(
@@ -93,8 +93,8 @@ class Source:
             packet_id=id(packet)
         )
 
-        self.sim.add_event(event_generation)
-        self.sim.add_event(event_arrival)
+        self.sim._add_event(event_generation)
+        self.sim._add_event(event_arrival)
 
 
 class PermitSource:
@@ -119,10 +119,10 @@ class PermitSource:
         self.name = name
         self.results = Results()
 
-    def register_with_model(self, model):
+    def _register_with_model(self, model):
         self.model = model
 
-    def register_with_sim(self, sim):
+    def _register_with_sim(self, sim):
         self.sim = sim
 
     def generate_packet(self):
@@ -135,7 +135,7 @@ class PermitSource:
 
         # Timestamp of next packet generation
         noise = (np.random.rand() - 0.5) / 20  # added noise
-        timestamp = self.sim.get_time() + np.random.poisson(1/self.rate, 1)[0] + noise
+        timestamp = self.sim._get_time() + np.random.poisson(1 / self.rate, 1)[0] + noise
 
         # Create packet
         packet = Packet(
@@ -146,9 +146,9 @@ class PermitSource:
         )
 
         # Register packet with model and simulation
-        packet.register_with_sim(self.sim)
-        packet.register_with_model(self.model)
-        self.model.add_packet(packet)
+        packet._register_with_sim(self.sim)
+        packet._register_with_model(self.model)
+        self.model._add_packet(packet)
 
         # packet generation event
         event_generation = Event(
@@ -177,8 +177,8 @@ class PermitSource:
             packet_id=id(packet)
         )
 
-        self.sim.add_event(event_generation)
-        self.sim.add_event(event_arrival)
+        self.sim._add_event(event_generation)
+        self.sim._add_event(event_arrival)
 
 
 class NegativeSource:
@@ -203,10 +203,10 @@ class NegativeSource:
         self.name = name
         self.results = Results()
 
-    def register_with_model(self, model):
+    def _register_with_model(self, model):
         self.model = model
 
-    def register_with_sim(self, sim):
+    def _register_with_sim(self, sim):
         self.sim = sim
 
     def generate_signal(self):
@@ -220,19 +220,18 @@ class NegativeSource:
             ptype=PacketType.NEG_SIGNAL,
             active=True,
             module_id=id(self),
-            generation_time=self.sim.get_time(),
+            generation_time=self.sim._get_time(),
             pkts_to_remove=1,
         )
 
         # Register packet with model and simulation
-        packet.register_with_sim(self.sim)
-        packet.register_with_model(self.model)
-        self.model.add_packet(packet)
+        packet._register_with_sim(self.sim)
+        packet._register_with_model(self.model)
+        self.model._add_packet(packet)
 
         # Create packet arrival event (at the module connected as output to the source)
         destination = choose_output(self.outputs_signal, packet.ptype)
-        event = create_arrival_event(destination, self.sim.get_time(), id(packet), pkt_type=packet.ptype)
-        self.sim.add_event(event)
+        event = create_arrival_event(destination, self.sim._get_time(), id(packet), pkt_type=packet.ptype)
+        self.sim._add_event(event)
 
-        # TODO: implement forwarding data packets to outputs, and signals to outputs_signal
 

@@ -32,13 +32,13 @@ class Simulation:
         self.pq = PriorityQueue()
         self.time = 0
 
-    def process_event(self, event):
+    def _process_event(self, event):
 
         # Each event has a module and packet associated with it
-        module_id = event.get_module_id()
-        packet_id = event.get_packet_id()
+        module_id = event._get_module_id()
+        packet_id = event._get_packet_id()
         module_ = self.model.get_module(module_id)
-        packet = self.model.get_packet(packet_id)
+        packet = self.model._get_packet(packet_id)
 
         if module_ is None:
             raise ValueError("Module with id %s not found in model! Check if all modules are registered with model "
@@ -47,7 +47,7 @@ class Simulation:
         if event.etype == EventType.SERVICE_COMPLETE:
 
             logger.info("%8.3f -- %s at node %s, packet id: %s" %
-                        (self.get_time(), event.etype, module_.name, str(packet_id)))
+                        (self._get_time(), event.etype, module_.name, str(packet_id)))
             del event
             module_.busy = False
 
@@ -56,13 +56,13 @@ class Simulation:
             if destination is None:
                 # This should never happen
                 logger.error("%8.3f -- node %s, packet id: %s - Destination not found!" %
-                             (self.get_time(), module_.name, str(packet_id)))
+                             (self._get_time(), module_.name, str(packet_id)))
                 raise TypeError("Destination not found in outputs of node %s. Make sure there's a Queue as output." %
                                 module_.name)
 
             # Put new event in priority queue
-            event = gu.create_arrival_event(destination, self.get_time(), packet_id, packet.ptype)
-            self.add_event(event)
+            event = gu.create_arrival_event(destination, self._get_time(), packet_id, packet.ptype)
+            self._add_event(event)
 
             # Get a new packet from inputs
             input_module = module_.inputs[0]['module']
@@ -70,19 +70,19 @@ class Simulation:
 
             if type(input_module) == Queue:
                 logger.debug("%8.3f -- Server %s asks input %s (len: %d) for more packets" %
-                             (self.get_time(), module_.name, input_module.name, len(input_module)))
+                             (self._get_time(), module_.name, input_module.name, len(input_module)))
 
             if type(input_module) == Queue and len(input_module) > 0:
                 new_packet = input_module.pop()
-                event = gu.create_arrival_event(module_, self.get_time(), id(new_packet), packet.ptype)
-                self.add_event(event)
+                event = gu.create_arrival_event(module_, self._get_time(), id(new_packet), packet.ptype)
+                self._add_event(event)
 
         elif event.etype == EventType.DETECTOR_SERVICE_COMPLETE:
 
             # Make a decision on malicious packet detection
-            if packet.is_malicious():
+            if packet._is_malicious():
                 detect_prob = module_.tp_rate
-            elif packet.is_normal():
+            elif packet._is_normal():
                 detect_prob = module_.fp_rate
             else:
                 detect_prob = 0
@@ -93,7 +93,7 @@ class Simulation:
             packet.detected = decision_attack
 
             logger.info("%8.3f -- %s at node %s, packet id: %s, detected attack: %s" %
-                        (self.get_time(), event.etype, module_.name, str(packet_id), str(decision_attack)))
+                        (self._get_time(), event.etype, module_.name, str(packet_id), str(decision_attack)))
 
             del event
             module_.busy = False
@@ -105,29 +105,29 @@ class Simulation:
             if destination is None:
                 # This should never happen
                 logger.error("%8.3f -- node %s, packet id: %s - Destination not found!" %
-                             (self.get_time(), module_.name, str(packet_id)))
+                             (self._get_time(), module_.name, str(packet_id)))
                 raise TypeError("Destination not found in outputs of node %s. Make sure there's a Queue as output." %
                                 module_.name)
 
-            event = gu.create_arrival_event(destination, self.get_time(), packet_id, packet.ptype)
-            self.add_event(event)
+            event = gu.create_arrival_event(destination, self._get_time(), packet_id, packet.ptype)
+            self._add_event(event)
 
             # Get a new packet from inputs (if queue)
             input_module = module_.inputs[0]['module']
             # todo: Implement multiple inputs to a server
             if type(input_module) == Queue:
                 logger.debug("%8.3f -- AnomalyDetector %s asks input %s (len: %d) for more packets" %
-                             (self.get_time(), module_.name, input_module.name, len(input_module)))
+                             (self._get_time(), module_.name, input_module.name, len(input_module)))
 
                 if len(input_module) > 0:
                     new_packet = input_module.pop()
-                    event = gu.create_arrival_event(module_, self.get_time(), id(new_packet), packet.ptype)
-                    self.add_event(event)
+                    event = gu.create_arrival_event(module_, self._get_time(), id(new_packet), packet.ptype)
+                    self._add_event(event)
 
         elif event.etype == EventType.PACKET_GENERATION or event.etype == EventType.PERMIT_GENERATION:
             # generate a new packet
             logger.info("%8.3f -- %s at node %s, packet id: %s" %
-                        (self.get_time(), event.etype, module_.name, str(packet_id)))
+                        (self._get_time(), event.etype, module_.name, str(packet_id)))
             module_.generate_packet()
             del event
 
@@ -142,7 +142,7 @@ class Simulation:
             if packet.ptype != PacketType.NEG_SIGNAL:
                 module_.appendleft(packet)
                 logger.info("%8.3f -- %s at node %s (qlen: %d), packet id: %s, type: %s" %
-                            (self.get_time(), event.etype, module_.name, len(module_), str(packet_id), packet.ptype))
+                            (self._get_time(), event.etype, module_.name, len(module_), str(packet_id), packet.ptype))
                 del event
 
                 # if packet is first in the queue, inform the output module of this
@@ -150,8 +150,8 @@ class Simulation:
                     destination = gu.choose_output(module_.outputs, packet.ptype)
                     if destination:
                         # Forward packet to destination if not busy, otherwise do nothing
-                        event = gu.create_arrival_event(destination, self.get_time(), packet_id, packet.ptype)
-                        self.add_event(event)
+                        event = gu.create_arrival_event(destination, self._get_time(), packet_id, packet.ptype)
+                        self._add_event(event)
                         module_.pop()
 
             # If by mistake packet is NEG_SIGNAL
@@ -165,12 +165,12 @@ class Simulation:
             # Check if packet is not negative, or module is not queue
             if packet.ptype != PacketType.NEG_SIGNAL:
                 logger.error("%8.3f -- %s - wrong packet type at node %s (qlen: %d), packet id: %s, type: %s" %
-                             (self.get_time(), event.etype, module_.name, len(module_), str(packet_id), packet.ptype))
+                             (self._get_time(), event.etype, module_.name, len(module_), str(packet_id), packet.ptype))
                 raise ValueError("Expected NEG_SIGNAL, but received different packet type as QUEUE_NEG_PACKET_ARRIVAL.")
 
             if type(module_) != Queue:
                 logger.error("%8.3f -- %s - negative signal received at non-queue module %s (qlen: %d), packet id: %s, "
-                             "type: %s" % (self.get_time(), event.etype, module_.name, len(module_), str(packet_id),
+                             "type: %s" % (self._get_time(), event.etype, module_.name, len(module_), str(packet_id),
                                            packet.ptype))
                 raise ValueError("NEG_SIGNAL arrived in non-queue module in QUEUE_NEG_PACKET_ARRIVAL.")
 
@@ -178,9 +178,9 @@ class Simulation:
             num_removed = packet.remove_data_packet(module_)
 
             logger.info("%8.3f -- %s at node %s (qlen: %d), packet id: %s, type: %s" %
-                        (self.get_time(), event.etype, module_.name, len(module_), str(packet_id), packet.ptype))
+                        (self._get_time(), event.etype, module_.name, len(module_), str(packet_id), packet.ptype))
             logger.info("%8.3f -- %s at node %s: %d packets removed (qlen: %d -> %d)" %
-                        (self.get_time(), event.etype, module_.name, num_removed, len(module_) + num_removed,
+                        (self._get_time(), event.etype, module_.name, num_removed, len(module_) + num_removed,
                          len(module_)))
             del event
 
@@ -195,9 +195,9 @@ class Simulation:
             service_duration = np.random.exponential(1 / module_.service_rate)
 
             logger.info("%8.3f -- %s at node %s, packet id: %s, service duration: %.3f" %
-                        (self.get_time(), event.etype, module_.name, str(packet_id), service_duration))
+                        (self._get_time(), event.etype, module_.name, str(packet_id), service_duration))
 
-            timestamp = service_duration + self.get_time()
+            timestamp = service_duration + self._get_time()
             etype = EventType.SERVICE_COMPLETE
             if event.etype == EventType.DETECTOR_PACKET_ARRIVAL:
                 etype = EventType.DETECTOR_SERVICE_COMPLETE
@@ -209,7 +209,7 @@ class Simulation:
                 module_id=module_id,
                 packet_id=packet_id
             )
-            self.add_event(event)
+            self._add_event(event)
 
         elif event.etype == EventType.NEG_PACKET_GENERATION:
             # A negative signal needs to be generated at a NegativeSource
@@ -221,43 +221,43 @@ class Simulation:
             destination = gu.choose_output(module_.outputs, packet.ptype)
             if destination is None:
                 logger.error("%8.3f -- node %s, packet id: %s - Destination not found!" %
-                             (self.get_time(), module_.name, str(packet_id)))
+                             (self._get_time(), module_.name, str(packet_id)))
                 raise TypeError("Destination not found in outputs of node %s. Make sure there's a Queue as output." %
                                 module_.name)
 
             # Put new event in priority queue
-            event = gu.create_arrival_event(destination, self.get_time(), packet_id, packet.ptype)
-            self.add_event(event)
+            event = gu.create_arrival_event(destination, self._get_time(), packet_id, packet.ptype)
+            self._add_event(event)
 
         elif event.etype == EventType.CONNECTOR_PERMIT_ARRIVAL:
             # A permit has arrived at a PermitConnector
             packet.set_module(module_id)
 
             logger.info("%8.3f -- %s at node %s (has_packet: %s, has_permit: %s), packet id: %s, type: %s" %
-                        (self.get_time(), event.etype, module_.name, module_.has_packet(), module_.has_permit(),
+                        (self._get_time(), event.etype, module_.name, module_._has_packet(), module_._has_permit(),
                          str(packet_id), packet.ptype))
 
-            if module_.has_packet():
+            if module_._has_packet():
                 # Forward packet to output
                 destination = gu.choose_output(module_.outputs, packet.ptype)
                 packet_id = id(module_.packet)
-                event = gu.create_arrival_event(destination, self.get_time(), packet_id, packet.ptype)
-                self.add_event(event)
+                event = gu.create_arrival_event(destination, self._get_time(), packet_id, packet.ptype)
+                self._add_event(event)
                 module_.packet = None
                 module_.permit = None
                 logger.debug("%8.3f -- %s forwards packet_id: %d. has_packet: %s, has_permit: %s" %
-                             (self.get_time(), module_.name, packet_id, module_.has_packet(), module_.has_permit()))
+                             (self._get_time(), module_.name, packet_id, module_._has_packet(), module_._has_permit()))
 
                 # Get a new packet from packets input (if queue)
                 input_pkt_module = module_.inputs_pkt[0]['module']
                 if type(input_pkt_module) == Queue:
                     logger.debug("%8.3f -- PermitConnector %s asks packet input %s (len: %d) for more packets" %
-                                 (self.get_time(), module_.name, input_pkt_module.name, len(input_pkt_module)))
+                                 (self._get_time(), module_.name, input_pkt_module.name, len(input_pkt_module)))
 
                     if len(input_pkt_module) > 0:
                         new_packet = input_pkt_module.pop()
-                        event = gu.create_arrival_event(module_, self.get_time(), id(new_packet), new_packet.ptype)
-                        self.add_event(event)
+                        event = gu.create_arrival_event(module_, self._get_time(), id(new_packet), new_packet.ptype)
+                        self._add_event(event)
                 else:
                     raise ValueError("Invalid network architecture!")
 
@@ -265,12 +265,12 @@ class Simulation:
                 input_prm_module = module_.inputs_prm[0]['module']
                 if type(input_prm_module) == Queue:
                     logger.debug("%8.3f -- PermitConnector %s asks permit input %s (len: %d) for more permits" %
-                                 (self.get_time(), module_.name, input_prm_module.name, len(input_prm_module)))
+                                 (self._get_time(), module_.name, input_prm_module.name, len(input_prm_module)))
 
                     if len(input_prm_module) > 0:
                         new_packet = input_prm_module.pop()
-                        event = gu.create_arrival_event(module_, self.get_time(), id(new_packet), new_packet.ptype)
-                        self.add_event(event)
+                        event = gu.create_arrival_event(module_, self._get_time(), id(new_packet), new_packet.ptype)
+                        self._add_event(event)
                 else:
                     raise ValueError("Invalid network architecture!")
 
@@ -282,29 +282,29 @@ class Simulation:
             packet.set_module(module_id)
 
             logger.info("%8.3f -- %s at node %s (has_packet: %s, has_permit: %s), packet id: %s, type: %s" %
-                        (self.get_time(), event.etype, module_.name, module_.has_packet(), module_.has_permit(),
+                        (self._get_time(), event.etype, module_.name, module_._has_packet(), module_._has_permit(),
                          str(packet_id), packet.ptype))
 
-            if module_.has_permit():
+            if module_._has_permit():
                 # Forward packet to output
                 destination = gu.choose_output(module_.outputs, packet.ptype)
-                event = gu.create_arrival_event(destination, self.get_time(), packet_id, packet.ptype)
-                self.add_event(event)
+                event = gu.create_arrival_event(destination, self._get_time(), packet_id, packet.ptype)
+                self._add_event(event)
                 module_.packet = None
                 module_.permit = None
                 logger.debug("%8.3f -- %s forwards packet_id: %d. has_packet: %s, has_permit: %s" %
-                             (self.get_time(), module_.name, packet_id, module_.has_packet(), module_.has_permit()))
+                             (self._get_time(), module_.name, packet_id, module_._has_packet(), module_._has_permit()))
 
                 # Get a new packet from packets input (if queue)
                 input_pkt_module = module_.inputs_pkt[0]['module']
                 if type(input_pkt_module) == Queue:
                     logger.debug("%8.3f -- PermitConnector %s asks packet input %s (len: %d) for more packets" %
-                                 (self.get_time(), module_.name, input_pkt_module.name, len(input_pkt_module)))
+                                 (self._get_time(), module_.name, input_pkt_module.name, len(input_pkt_module)))
 
                     if len(input_pkt_module) > 0:
                         new_packet = input_pkt_module.pop()
-                        event = gu.create_arrival_event(module_, self.get_time(), id(new_packet), new_packet.ptype)
-                        self.add_event(event)
+                        event = gu.create_arrival_event(module_, self._get_time(), id(new_packet), new_packet.ptype)
+                        self._add_event(event)
                 else:
                     raise ValueError("Invalid network architecture!")
 
@@ -312,19 +312,19 @@ class Simulation:
                 input_prm_module = module_.inputs_prm[0]['module']
                 if type(input_prm_module) == Queue:
                     logger.debug("%8.3f -- PermitConnector %s asks permit input %s (len: %d) for more permits" %
-                                 (self.get_time(), module_.name, input_prm_module.name, len(input_prm_module)))
+                                 (self._get_time(), module_.name, input_prm_module.name, len(input_prm_module)))
 
                     if len(input_prm_module) > 0:
                         new_packet = input_prm_module.pop()
-                        event = gu.create_arrival_event(module_, self.get_time(), id(new_packet), new_packet.ptype)
-                        self.add_event(event)
+                        event = gu.create_arrival_event(module_, self._get_time(), id(new_packet), new_packet.ptype)
+                        self._add_event(event)
                 else:
                     raise ValueError("Invalid network architecture!")
 
             else:
                 module_.packet = packet
 
-    def get_summary(self):
+    def _get_summary(self):
 
         vector_res = {
             'module_name': [],
@@ -419,21 +419,15 @@ class Simulation:
     def add_model(self, model):
         self.model = model
         for module in model.get_modules():
-            module.register_with_sim(self)
+            module._register_with_sim(self)
         for source in model.get_sources():
-            source.register_with_sim(self)
+            source._register_with_sim(self)
 
-    def get_model(self):
-        return self.model
-
-    def get_time(self):
+    def _get_time(self):
         return self.time
 
-    def add_event(self, event):
+    def _add_event(self, event):
         self.pq.put(event)
-
-    def get_duration(self):
-        return self.duration
 
     def run(self):
 
@@ -448,17 +442,17 @@ class Simulation:
 
             # Get next event from queue
             event = self.pq.get()
-            self.time = event.get_timestamp()
+            self.time = event._get_timestamp()
 
             # Check if simulation end reached
             if self.time > self.duration:
                 break
 
             # Process event
-            self.process_event(event)
+            self._process_event(event)
 
         # End of simulationerror
-        self.get_summary()
+        self._get_summary()
 
 
 class Model:
@@ -467,11 +461,10 @@ class Model:
         self.modules = {}
         self.packets = {}  # todo: check if I really need this
         self.sources = {}
-        self.destinations = {}
         self.name = name
 
     def add_module(self, module):
-        module.register_with_model(self)
+        module._register_with_model(self)
         self.modules[id(module)] = module
 
         if type(module) == Source or type(module) == PermitSource:
@@ -486,10 +479,10 @@ class Model:
     def get_sources(self):
         return list(self.sources.values())
 
-    def add_packet(self, packet):
+    def _add_packet(self, packet):
         self.packets[id(packet)] = packet
 
-    def get_packet(self, packet_id):
+    def _get_packet(self, packet_id):
         return self.packets.get(packet_id, None)
 
 
@@ -503,7 +496,7 @@ if __name__ == '__main__':
     ATTACK_PROB = 0.05
     ATTACK_RETURN_PROB = 0.5
 
-    sim = Simulation(duration=10000, name="sim-test")
+    sim = Simulation(duration=1000, name="sim-test")
 
     # Declare model's components
     qu = Queue(name='qu')

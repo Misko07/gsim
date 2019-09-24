@@ -159,11 +159,6 @@ def get_waittimes(results_file, data_modules=('qu', 'qs1', 's1', 'qs2', 's2', 'c
     return res
 
 
-
-# Todo: plot all results given a simulation name and store figures in a single place
-
-
 if __name__ == '__main__':
-    plot_graph1()
     # get_waittimes(results_file='results/vec-190915-184128.csv')
-    # plot_module_utilisation(results_file='results/vec-190915-153434.csv', module_name='qp')  # module_id='2530220349256')  #  module_name='q2'
+    plot_module_utilisation(results_file='results/vec-sim-test.csv', module_name='qs1')  # module_id='2530220349256')  #  module_name='q2'
