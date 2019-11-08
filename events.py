@@ -1,3 +1,19 @@
+from enum import Enum
+
+
+class EventType(Enum):
+    SERVICE_COMPLETE = 0
+    DETECTOR_SERVICE_COMPLETE = 1
+    PACKET_GENERATION = 2
+    PERMIT_GENERATION = 3
+    QUEUE_PACKET_ARRIVAL = 4  # Used for both data and permit packets
+    QUEUE_NEG_PACKET_ARRIVAL = 5
+    SERVER_PACKET_ARRIVAL = 6
+    DETECTOR_PACKET_ARRIVAL = 7
+    CONNECTOR_PACKET_ARRIVAL = 8
+    CONNECTOR_PERMIT_ARRIVAL = 9
+    NEG_PACKET_GENERATION = 10
+
 
 class Event:
 
@@ -24,9 +40,4 @@ class Event:
 
     def get_timestamp(self):
         return self.__timestamp
-
-# Todo: implement etypes
-# ETYPES = [
-#
-# ]
 
