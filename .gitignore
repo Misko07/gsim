@@ -1,4 +1,5 @@
 .idea/
-logs.log
-results/
 __pycache__/
+results/
+logs.log
+temp_plot.html

@@ -1,11 +1,12 @@
 from gsim.modules import Server, Queue, AnomalyDetector, PermitConnector
 from gsim.events import Event, EventType
 from gsim.packets import PacketType
+from gsim.configs import ROOT_DIR
 import numpy as np
 import logging
 
 
-logging.config.fileConfig("logging.conf")
+logging.config.fileConfig(ROOT_DIR + "/logging.conf")
 logger = logging.getLogger('utils')
 
 
@@ -40,9 +41,9 @@ def choose_output(outputs, pkt_type=None):
 
         # Special conditions if next module is Permit Connector
         if type(module) == PermitConnector:
-            if pkt_type == PacketType.PERMIT and module.has_permit():
+            if pkt_type == PacketType.PERMIT and module._has_permit():
                 continue
-            if pkt_type in [PacketType.NORMAL, PacketType.MALICIOUS] and module.has_packet():
+            if pkt_type in [PacketType.NORMAL, PacketType.MALICIOUS] and module._has_packet():
                 continue
 
         outputs_subset.append(module)
@@ -64,8 +65,8 @@ def choose_output(outputs, pkt_type=None):
 
     assert(np.sum(probs_subset_adjusted) == 1)
 
-    # Pick one output and return in
-    index = np.random.choice(len(outputs_subset), probs_subset_adjusted)[0]
+    # Pick one output and return it
+    index = np.random.choice(len(outputs_subset), p=probs_subset_adjusted)
     return outputs_subset[index]
 
 
@@ -83,10 +84,10 @@ def create_arrival_event(destination, time_now, packet_id, pkt_type=None):
         etype = EventType.QUEUE_PACKET_ARRIVAL
     elif type(destination) == AnomalyDetector and not destination.busy:
         etype = EventType.DETECTOR_PACKET_ARRIVAL
-    elif type(destination) == PermitConnector and pkt_type == PacketType.PERMIT and not destination.has_permit():
+    elif type(destination) == PermitConnector and pkt_type == PacketType.PERMIT and not destination._has_permit():
         etype = EventType.CONNECTOR_PERMIT_ARRIVAL
     elif type(destination) == PermitConnector and (pkt_type == PacketType.NORMAL or pkt_type == PacketType.MALICIOUS) \
-            and not destination.has_packet():
+            and not destination._has_packet():
         etype = EventType.CONNECTOR_PACKET_ARRIVAL
 
     if etype:

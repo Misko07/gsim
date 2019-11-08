@@ -1,6 +1,7 @@
-from results import Results
-
+from gsim.results import Results
 from collections import deque
+
+# Todo: Add a 'Module' class and all other modules will inherit of it
 
 
 class Queue(deque):
@@ -8,16 +9,15 @@ class Queue(deque):
     def __init__(self, inputs=None, outputs=None, model=None, sim=None, name=None):
         self.model = model
         self.sim = sim
-        self.inputs = inputs
         self.outputs = outputs
         self.name = name
         self.results = Results()
         deque.__init__(self)
 
-    def register_with_model(self, model):
+    def _register_with_model(self, model):
         self.model = model
 
-    def register_with_sim(self, sim):
+    def _register_with_sim(self, sim):
         self.sim = sim
 
 
@@ -36,16 +36,10 @@ class Server:
     def set_inputs(self, inputs):
         self.inputs = inputs
 
-    def set_outputs(self, outputs):
-        self.outputs = outputs
-
-    def set_service_rate(self, service_rate):
-        self.service_rate = service_rate
-
-    def register_with_model(self, model):
+    def _register_with_model(self, model):
         self.model = model
 
-    def register_with_sim(self, sim):
+    def _register_with_sim(self, sim):
         self.sim = sim
 
 
@@ -65,19 +59,10 @@ class AnomalyDetector:
         self.busy = busy
         self.results = Results()
 
-    def set_inputs(self, inputs):
-        self.inputs = inputs
-
-    def set_outputs(self, outputs):
-        self.outputs = outputs
-
-    def set_service_rate(self, service_rate):
-        self.service_rate = service_rate
-
-    def register_with_model(self, model):
+    def _register_with_model(self, model):
         self.model = model
 
-    def register_with_sim(self, sim):
+    def _register_with_sim(self, sim):
         self.sim = sim
 
 
@@ -99,23 +84,17 @@ class PermitConnector:
         self.sim = sim
         self.name = name
         self.results = Results()
-        self.packet = None  # current packet
-        self.permit = None  # current permit
+        self._packet = None  # current packet
+        self._permit = None  # current permit
 
-    def register_with_model(self, model):
+    def _register_with_model(self, model):
         self.model = model
 
-    def register_with_sim(self, sim):
+    def _register_with_sim(self, sim):
         self.sim = sim
 
-    def has_packet(self):
-        return self.packet is not None
+    def _has_packet(self):
+        return self._packet is not None
 
-    def has_permit(self):
-        return self.permit is not None
-
-
-
-# Todo: Add a 'Module' class and all other modules will inherit of it
-
-
+    def _has_permit(self):
+        return self._permit is not None
